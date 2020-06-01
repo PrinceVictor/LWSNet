@@ -105,7 +105,7 @@ class hourglass():
         return deconvbn(input=input,
                         channel=self.init_channel*2,
                         kernel_size=3,
-                        padding=1,
+                        padding=[1,0,1,0],
                         stride=2,
                         conv_param_attr=layer_init_kaiming_normal(),
                         conv_bias_attr=False,
@@ -117,7 +117,7 @@ class hourglass():
         return deconvbn(input=input,
                         channel=self.init_channel,
                         kernel_size=3,
-                        padding=1,
+                        padding=[1,0,1,0],
                         stride=2,
                         conv_param_attr=layer_init_kaiming_normal(),
                         conv_bias_attr=False,
@@ -132,11 +132,12 @@ class hourglass():
         pre = self.conv2(output_0)
 
         output_1 = self.conv3(pre)
+
         output_2 = self.conv4(output_1)
 
         res.append(output_2)
 
-        post = fluid.layers.relu(input=(self.conv5(output_2) + pre))
+        post = fluid.layers.relu((self.conv5(output_2) + pre))
         res.append(post)
 
         output = self.conv6(post)
@@ -178,7 +179,7 @@ class feature_extraction():
         output_0 = convbn(input=input,
                           channel=4,
                           kernel_size=3,
-                          stride=2,
+                          stride=1,
                           padding=1,
                           dilation=2,
                           conv_param_attr=layer_init_kaiming_normal(),
@@ -225,12 +226,14 @@ class feature_extraction():
     def inference(self, input):
 
         output_0 = self.dres0(input)
+
         output_1 = self.dres1(output_0) + output_0
 
         res = self.dres2(output_1)
         output_2 = res[-1] + output_1
 
         output_3 = self.dres3(output_2)
+
         res.pop(-1)
         res.append(output_3)
 
