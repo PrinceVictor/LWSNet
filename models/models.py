@@ -2,6 +2,7 @@ import paddle
 import paddle.fluid as fluid
 
 from models.submodules import *
+from utils.utils import *
 
 class Ownnet():
     def __init__(self):
@@ -33,7 +34,42 @@ class Ownnet():
         cost = fluid.data(name='cost', shape=cost_shape, dtype='float32')
 
         for i in range(0, maxdisp, stride):
-            cost[:, i//stride, :, : i] = fluid.layers.abs(feat_l[:, :, :, :i])
+            cost[:, i//stride, :, : i] = \
+                fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i]), dim=1)
+
+            if i > 0:
+                cost[:, i // stride, :, i:] = \
+                    fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i] - feat_r[:, :, :, :-i]), dim=1)
+
+            else:
+                cost[:, i // stride, :, i:] = \
+                    fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :] - feat_r[:, :, :, :]), dim=1)
+
+        return cost
+
+    def _build_volume_2d3(self, feat_l, feat_r, maxdisp, disp, stride=1):
+
+        shape = feat_l.shape
+
+        # batch_disp = fluid.layers.expand(unsqueeze(disp, [1]), [1, maxdisp*2-1, 1, 1, 1])
+        # batch_disp = fluid.layers.reshape(batch_disp, shape=[-1, 1, shape[-2], shape[-1]], inplace=True)
+
+        batch_disp = unsqueeze_repeat_view(disp, maxdisp, [-1, 1, shape[-2], shape[-1]])
+
+        batch_shfit = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, dtype='int32'), shape[0])
+        batch_shfit = fluid.layers.reshape(batch_shfit, [-1,1,1,1]) * stride
+
+        batch_disp = batch_disp - fluid.layers.cast(batch_shfit, 'float32')
+
+        batch_feat_l = unsqueeze_repeat_view(feat_l, maxdisp, [-1, shape[-3], shape[-2], shape[-1]])
+        batch_feat_r = unsqueeze_repeat_view(feat_r, maxdisp, [-1, shape[-3], shape[-2], shape[-1]])
+
+        
+
+
+
+
+
 
 
 
