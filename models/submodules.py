@@ -49,6 +49,15 @@ def deconvbn(input, channel,
                                    bias_attr=bn_bias_attr,
                                    in_place=True)
 
+def batch_relu_conv3d(input, channel,
+                      kernel_size=3, stride=1, padding=1, bn3d=True):
+
+    if bn3d:
+        
+
+
+
+
 class hourglass():
     def __init__(self, init_channel=8):
         self.init_channel = init_channel

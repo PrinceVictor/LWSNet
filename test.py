@@ -18,11 +18,13 @@ if __name__ == "__main__":
     # print(unsqueeze(images, [3]).shape)
     # print(images)
 
-    batch_shfit = fluid.layers.expand(fluid.layers.range(-5 + 1, 5, 1, dtype='int32'), [3])
-    print(batch_shfit.shape)
-    print(batch_shfit)
-    batch_shfit = fluid.layers.reshape(batch_shfit, [-1, 1])*3
-    batch_shfit = fluid.layers.cast(batch_shfit, 'float32')
+    xx = fluid.data(name='xx', shape=[10, 1, 3, 4], dtype='float32')
+    yy = fluid.data(name='xx', shape=[10, 1, 3, 4], dtype='float32')
+
+    output = fluid.layers.concat([xx, yy], 1)
+
+    print(output.shape)
+    print(output[:, :1, :, :])
 
 
     # images = fluid.layers.reshape(images, shape=[-1, 368], inplace=True)
@@ -33,19 +35,15 @@ if __name__ == "__main__":
     # left_img = np.random.rand(2, 1, 368, 1232).astype(dtype=np.float32)
     # right_img = np.random.rand(2, 1, 368, 1232).astype(dtype=np.float32)
     #
-    place = fluid.CUDAPlace(0)
-    exe = fluid.Executor(place)
-
-    exe.run(fluid.default_startup_program())
+    # place = fluid.CUDAPlace(0)
+    # exe = fluid.Executor(place)
+    #
+    # exe.run(fluid.default_startup_program())
 
     # batch_shfit= exe.run(feed={'disp':left_img, 'disp':left_img},
     #                   fetch_list=[batch_shfit])
 
-    batch_shfit = exe.run(fetch_list=batch_shfit)
-
-    print(type(batch_shfit))
-    print(batch_shfit[0].shape)
-    print(batch_shfit[0].dtype)
+    # batch_shfit = exe.run(fetch_list=batch_shfit)
 
 
     # print(predict[-1].shape[0])
