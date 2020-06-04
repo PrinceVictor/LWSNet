@@ -73,7 +73,52 @@ def batch_relu_conv3d(input, channel,
                                  bias_attr=conv_bias_attr)
     return output
 
-def preconv2d_depthseperated()
+def preconv2d(input, channel,kernel_size, stride, pad, dilation=1, bn=True):
+    if bn:
+        output = fluid.layers.batch_norm(input=input,
+                                         act='relu',
+                                         in_place=True)
+    else:
+        output = fluid.layers.relu(input)
+
+    return fluid.layers.conv2d(input=output,
+                               num_filters=channel,
+                               filter_size=kernel_size,
+                               stride=stride,
+                               padding=dilation if dilation > 1 else pad,
+                               dilation=dilation,
+                               param_attr=None,
+                               bias_attr=False,)
+
+
+
+def preconv2d_depthseperated(input, channel,
+                             kernel_size, stride, pad,
+                             dilation=1, bn=True, seperated=False):
+    if bn:
+        output = fluid.layers.batch_norm(input=input,
+                                         act='relu',
+                                         in_place=True)
+    else:
+        output = fluid.layers.relu(input)
+
+    output = fluid.layers.conv2d(input=output,
+                                 num_filters=output.shape[1],
+                                 filter_size=kernel_size,
+                                 stride=stride,
+                                 padding=dilation if dilation > 1 else pad,
+                                 dilation=dilation,
+                                 param_attr=None,
+                                 bias_attr=False,
+                                 groups=output.shape[1])
+    output = fluid.layers.conv2d(input=output,
+                                 num_filters=channel,
+                                 filter_size=1,
+                                 stride=1,
+                                 padding=0,
+                                 param_attr=None,
+                                 bias_attr=False)
+    return output
 
 class Post_3DConvs():
     def __init__(self, layers, channels):
@@ -93,6 +138,53 @@ class refinement1():
         self.channels = channels
 
     def inference(self, input):
+        output = fluid.layers.conv2d(input=input,
+                                     num_filters=self.channels,
+                                     filter_size=3,
+                                     stride=1,
+                                     padding=1,
+                                     param_attr=None,
+                                     bias_attr=None)
+
+        for k in range(4):
+            output = preconv2d_depthseperated(input=output,
+                                              channel=self.channels,
+                                              kernel_size=3,
+                                              stride=1,
+                                              pad=1,
+                                              dilation=2**(k+1))
+
+        return output
+
+class refinement2():
+    def __init__(self, channels):
+        self.channels = channels
+
+    def inference(self, input):
+        output = preconv2d(input=input,
+                           channel=self.channels,
+                           kernel_size=3,
+                           stride=1,
+                           pad=1,
+                           dilation=8)
+
+
+        for k in reversed(range(3)):
+            output = preconv2d_depthseperated(input=output,
+                                              channel=self.channels,
+                                              kernel_size=3,
+                                              stride=1,
+                                              pad=1,
+                                              dilation=2**k)
+
+        output = fluid.layers.conv2d(input=output,
+                                     num_filters=1,
+                                     filter_size=3,
+                                     stride=1,
+                                     padding=1,
+                                     param_attr=None,
+                                     bias_attr=None)
+        return output
 
 class hourglass():
     def __init__(self, init_channel=8):

@@ -19,6 +19,10 @@ class Ownnet():
             net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
 
+        self.refinement1_left = refinement1(channels=32)
+        self.refinement1_disp = refinement1(channels=32)
+        self.refinement2 = refinement2(channels=32)
+
 
     def feature_extractor(self, input):
         return self.feature_extraction.inference(input)
@@ -155,7 +159,14 @@ class Ownnet():
                                                        out_shape=[img_size[2], img_size[3]])
                 pred.append(disp_up+pred[scale-1])
 
-        refined_left = self.
+        refined_left = self.refinement1_left.inference(left_input)
+        refined_disp = self.refinement1_disp.inference(pred[-1])
+        disp = self.refinement2.inference(input=fluid.layers.concat([refined_left, refined_disp], 1))
+        disp_up = fluid.layers.resize_bilinear(input=disp,
+                                               out_shape=[img_size[2], img_size[3]])
+        pred.append(pred[2]+disp_up)
+
+        return pred
 
 
 def disparity_regression(input, start, end, stride=1):
