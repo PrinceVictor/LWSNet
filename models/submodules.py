@@ -41,8 +41,8 @@ def deconvbn(input, channel,
                                            padding=padding,
                                            stride=stride,
                                            param_attr=conv_param_attr,
-                                           bias_attr=conv_bias_attr,
-                                           )
+                                           bias_attr=conv_bias_attr)
+
     return fluid.layers.batch_norm(input=output,
                                    act=bn_activation,
                                    param_attr=bn_param_attr,
@@ -50,13 +50,49 @@ def deconvbn(input, channel,
                                    in_place=True)
 
 def batch_relu_conv3d(input, channel,
-                      kernel_size=3, stride=1, padding=1, bn3d=True):
+                      kernel_size=3, stride=1, padding=1, bn3d=True,
+                      bn_activation='relu',
+                      conv_param_attr=None, conv_bias_attr=False,
+                      bn_param_attr=None, bn_bias_attr=None):
 
     if bn3d:
-        
+        output = fluid.layers.batch_norm(input=input,
+                                         act=bn_activation,
+                                         param_attr=bn_param_attr,
+                                         bias_attr=bn_bias_attr,
+                                         in_place=True)
+    else:
+        output = fluid.layers.relu(input)
+
+    output = fluid.layers.conv3d(input=output,
+                                 num_filters=channel,
+                                 filter_size=kernel_size,
+                                 padding=padding,
+                                 stride=stride,
+                                 param_attr=conv_param_attr,
+                                 bias_attr=conv_bias_attr)
+    return output
+
+def preconv2d_depthseperated()
+
+class Post_3DConvs():
+    def __init__(self, layers, channels):
+        self.layers = layers
+        self.channels = channels
+
+    def post_3dconvs(self, input):
+        output = batch_relu_conv3d(input=input, channel=self.channels)
+        for i in range(self.layers):
+            output = batch_relu_conv3d(input=output, channel=self.channels)
+        output = batch_relu_conv3d(input=output, channel=1)
+        return output
 
 
+class refinement1():
+    def __init__(self, channels):
+        self.channels = channels
 
+    def inference(self, input):
 
 class hourglass():
     def __init__(self, init_channel=8):

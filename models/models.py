@@ -5,10 +5,20 @@ from models.submodules import *
 from utils.utils import *
 
 class Ownnet():
-    def __init__(self):
-        self.feature_extraction = feature_extraction()
+    def __init__(self, args):
 
+        self.maxdisplist = args.maxdisplist
+        self.layers_3d = args.layers_3d
+        self.channels_3d = args.channels_3d
+        self.growth_rate = args.growth_rate
+
+        self.feature_extraction = feature_extraction()
         self.volume_postprocess = []
+
+        for i in range(3):
+            net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
+            self.volume_postprocess.append(net3d)
+
 
     def feature_extractor(self, input):
         return self.feature_extraction.inference(input)
@@ -123,3 +133,38 @@ class Ownnet():
                                              stride=1)
 
             cost = unsqueeze(cost, [1])
+            cost = self.volume_postprocess[scale].post_3dconvs(cost) + cost
+            cost = fluid.layers.squeeze(cost, [1])
+
+            if scale == 0:
+                pre_low_res = disparity_regression(input=fluid.layers.softmax(-cost, axis=1),
+                                                   start=0,
+                                                   end=self.maxdisplist[0])
+                pre_low_res = pre_low_res * img_size[2]/pre_low_res.shape[2]
+
+                disp_up = fluid.layers.resize_bilinear(pre_low_res,
+                                                       out_shape=[img_size[2], img_size[3]])
+                pred.append(disp_up)
+            else:
+                pre_low_res = disparity_regression(input=fluid.layers.softmax(-cost, axis=1),
+                                                   start=-self.maxdisplist[scale]+1,
+                                                   end=self.maxdisplist[scale])
+                pre_low_res = pre_low_res * img_size[2] / pre_low_res.shape[2]
+
+                disp_up = fluid.layers.resize_bilinear(pre_low_res,
+                                                       out_shape=[img_size[2], img_size[3]])
+                pred.append(disp_up+pred[scale-1])
+
+        refined_left = self.
+
+
+def disparity_regression(input, start, end, stride=1):
+    disp = fluid.layers.range(start*stride, end*stride, stride, dtype='float32')
+    disp.stop_gradient = True
+    disp = fluid.layers.reshape(disp, shape=[1, -1, 1, 1])
+
+    disp = fluid.layers.expand(disp,
+                               expand_times=[input.shape[0], 1, input.shape[2], input.shape[3]])
+
+    output = fluid.layers.reduce_sum(input*disp, dim=1, keep_dim=True)
+    return output

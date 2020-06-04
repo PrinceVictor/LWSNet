@@ -27,6 +27,17 @@ if __name__ == "__main__":
     print(output[:, :1, :, :])
 
 
+    def print_test(i):
+
+        print('i: ', i)
+
+    i_list = [print_test]
+    i_list = i_list + [print_test]
+
+    print(len(i_list))
+    print(i_list[0](5))
+
+
     # images = fluid.layers.reshape(images, shape=[-1, 368], inplace=True)
     # print( fluid.layers.reshape(images[:,:,:,:,None], shape=[-1, 368], inplace=True).shape)
 
