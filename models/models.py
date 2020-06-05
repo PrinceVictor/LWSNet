@@ -50,9 +50,16 @@ class Ownnet():
         yy = fluid.layers.expand(fluid.layers.reshape(yy, shape=[1, 1, H, W]),
                                  expand_times=[B, 1, 1, 1])
 
-        vgrid = fluid.layers.concat([xx, yy], 1)
+        # vgrid = fluid.layers.concat([xx, yy], 1)
 
-        vgrid[:, :1, :, :] = vgrid[:, :1, :, :] - disp
+        xx_disp_sub = fluid.layers.elementwise_sub(xx, disp)
+
+        vgrid = fluid.layers.concat([xx_disp_sub, yy], 1)
+
+
+        # fluid.layers.assign(fluid.layers.elementwise_sub(vgrid[:, :1, :, :], disp), vgrid[:, :1, :, :])
+
+        # vgrid[:, :1, :, :] = vgrid[:, :1, :, :] - disp
 
         # vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :] / max(W - 1, 1) - 1.0
         # vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :] / max(H - 1, 1) - 1.0
@@ -66,20 +73,27 @@ class Ownnet():
     def _build_volume_2d(self, feat_l, feat_r, maxdisp, stride=1):
         assert maxdisp % stride == 0
 
-        cost_shape = [feat_l.shape[0], maxdisp//stride, feat_l.shape[2], feat_l.shape[3]]
-        cost = fluid.data(name='cost', shape=cost_shape, dtype='float32')
-
+        cost_list = []
         for i in range(0, maxdisp, stride):
-            cost[:, i//stride, :, : i] = \
-                fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i]), dim=1)
 
             if i > 0:
-                cost[:, i // stride, :, i:] = \
-                    fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i] - feat_r[:, :, :, :-i]), dim=1)
 
+                cost_left = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i]), dim=1, keep_dim=True)
+                cost_right = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, i:] - feat_r[:, :, :, :-i]),
+                                                     dim=1, keep_dim=True)
+
+                temp_cost = fluid.layers.concat(input=[cost_left, cost_right], axis=-1)
             else:
-                cost[:, i // stride, :, i:] = \
-                    fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :] - feat_r[:, :, :, :]), dim=1)
+                # cost[:, i // stride, :, i:] = \
+                #     fluid.layers.reduce_sum(
+                #         fluid.layers.abs(fluid.layers.elementwise_sub(feat_l[:, :, :, :], feat_r[:, :, :, :])),
+                #         dim=1)
+                temp_cost = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :] - feat_r[:, :, :, :]),
+                                                     dim=1, keep_dim=True)
+
+            cost_list.append(temp_cost)
+
+        cost = fluid.layers.concat(cost_list, axis=1)
 
         return cost
 
@@ -92,7 +106,7 @@ class Ownnet():
 
         batch_disp = unsqueeze_repeat_view(disp, maxdisp, [-1, 1, shape[-2], shape[-1]])
 
-        batch_shfit = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, dtype='int32'), shape[0])
+        batch_shfit = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, step=1, dtype='int32'), [shape[0]])
         batch_shfit = fluid.layers.reshape(batch_shfit, [-1,1,1,1]) * stride
 
         batch_disp = batch_disp - fluid.layers.cast(batch_shfit, 'float32')
@@ -171,11 +185,14 @@ class Ownnet():
 
 def disparity_regression(input, start, end, stride=1):
     disp = fluid.layers.range(start*stride, end*stride, stride, dtype='float32')
+
     disp.stop_gradient = True
     disp = fluid.layers.reshape(disp, shape=[1, -1, 1, 1])
 
     disp = fluid.layers.expand(disp,
                                expand_times=[input.shape[0], 1, input.shape[2], input.shape[3]])
+    # disp = fluid.layers.expand(disp,
+    #                            expand_times=[1, 1, input.shape[2], input.shape[3]])
 
     output = fluid.layers.reduce_sum(input*disp, dim=1, keep_dim=True)
     return output
