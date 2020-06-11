@@ -84,12 +84,8 @@ class Ownnet():
 
                 temp_cost = fluid.layers.concat(input=[cost_left, cost_right], axis=-1)
             else:
-                # cost[:, i // stride, :, i:] = \
-                #     fluid.layers.reduce_sum(
-                #         fluid.layers.abs(fluid.layers.elementwise_sub(feat_l[:, :, :, :], feat_r[:, :, :, :])),
-                #         dim=1)
                 temp_cost = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :] - feat_r[:, :, :, :]),
-                                                     dim=1, keep_dim=True)
+                                                    dim=1, keep_dim=True)
 
             cost_list.append(temp_cost)
 
