@@ -14,7 +14,11 @@ def setup_logger(name, save_path=None):
         "[%(asctime)s %(filename)s:%(lineno)s] %(levelname)s: %(message)s")
 
     stream_handler.setFormatter(log_formatter)
+
     logger.addHandler(stream_handler)
+
+    for h in logger.handlers:
+        print(h.name)
 
     if save_path is not None:
         file_handler = logging.FileHandler(os.path.join(save_path, name))

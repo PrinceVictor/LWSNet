@@ -31,7 +31,7 @@ def reader_creator_random_image():
     data_shape = [1, 3, 368, 1232]
 
     def reader():
-        for i in range(100):
+        for i in range(10000000000):
             yield np.random.uniform(-1, 1, size=3 * 368 * 1232).reshape(data_shape), \
                   np.random.uniform(-1, 1, size=3 * 368 * 1232).reshape(data_shape)
 
@@ -58,30 +58,33 @@ if __name__ == "__main__":
 
     for data in batch_reader():
         print(len(data))
-
-    net = Ownnet(args)
-
+        print(data[0][0].shape)
 
 
-    train_prog = fluid.Program()
-    train_startup = fluid.Program()
 
-
-    with fluid.program_guard(train_prog, train_startup):
-        with fluid.unique_name.guard():
-            disp, train_loader = network()
-
-    place = fluid.CUDAPlace(0)
-    exe = fluid.Executor(place)
-
-    exe.run(train_startup)
-
-    train_loader.set_sample_list_generator(batch_reader, places=fluid.cuda_places(0))
-
-    for data in train_loader():
-        predict = exe.run(program=train_prog, feed=data, fetch_list=[disp])
-        print("success predict", len(disp))
-        print(predict[0].shape)
-        print(type(predict[0]))
-        print(type(disp[0]))
-        # predict
+    # net = Ownnet(args)
+    #
+    #
+    #
+    # train_prog = fluid.Program()
+    # train_startup = fluid.Program()
+    #
+    #
+    # with fluid.program_guard(train_prog, train_startup):
+    #     with fluid.unique_name.guard():
+    #         disp, train_loader = network()
+    #
+    # place = fluid.CUDAPlace(0)
+    # exe = fluid.Executor(place)
+    #
+    # exe.run(train_startup)
+    #
+    # train_loader.set_sample_list_generator(batch_reader, places=fluid.cuda_places(0))
+    #
+    # for data in train_loader():
+    #     predict = exe.run(program=train_prog, feed=data, fetch_list=[disp])
+    #     print("success predict", len(disp))
+    #     print(predict[0].shape)
+    #     print(type(predict[0]))
+    #     print(type(disp[0]))
+    #     # predict

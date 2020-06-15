@@ -2,20 +2,75 @@ import paddle
 import paddle.fluid as fluid
 
 import numpy as np
-import argparse
+import cv2
+import os
 
-from models.models import *
+def img_loader(path):
+    img = cv2.imread(path)
+    img = img[:,:,::-1].astype(np.float32)
+    img = img / 255.0 * 2.0 - 1.0
 
-parser = argparse.ArgumentParser(description='inference img')
-parser.add_argument('--maxdisp', type=int, default=192,
-                    help='maxium disparity')
-parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
-parser.add_argument('--max_disparity', type=int, default=192)
-parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
-parser.add_argument('--channels_3d', type=int, default=8, help='number of initial channels 3d feature extractor ')
-parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
-parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
-args = parser.parse_args()
+    return img
+
+
+def disp_loader(path):
+    img = cv2.imread(path)
+    img = img.astype(np.float32)
+    img = img / 255.0 * 2.0 - 1.0
+
+    return img
+
+
+class ImageLoad():
+
+    def __init__(self, left, right, disp_l, img_loader=img_loader, disp_loader=disp_loader, training=False):
+
+        self.left = left
+        self.right = right
+        self.disp_l = disp_l
+        self.img_loader = img_loader
+        self.disp_loader = disp_loader
+        self.training = training
+
+    def create_reader(self):
+
+        data_shape = [1, 3, 368, 1232]
+
+        img_len = len(self.left)
+        training = self.training
+
+        def reader():
+
+            for i in range(img_len):
+                left = self.left[i]
+                right = self.right[i]
+                disp_l = self.disp_l[i]
+
+                left_img = self.img_loader(left)
+                right_img = self.img_loader(right)
+                gt = self.disp_loader(disp_l)
+
+                if training:
+                    h, w, c = left_img.shape
+                    th, tw = 256, 512
+
+                    x1 = np.random.randint(0, w-tw)
+                    y1 = np.random.randint(0, h-th)
+
+                    left_img = left_img[y1:y1+th, x1:x1+tw, :]
+                    right_img = right_img[y1:y1+th, x1:x1+tw, :]
+                    gt = gt[y1:y1+th, x1:x1+tw, :]
+
+                else:
+                    h, w, c = left_img.shape
+
+                    left_img = left_img[h-368:h, w-1232:w, :]
+                    right_img = right_img[h-368:h, w-1232:w, :]
+                    gt = gt[h-368:h, w-1232:w, :]
+
+                yield left_img, right_img, gt
+
+        return reader
 
 def reader_creator_random_image():
     data_shape = [10, 3, 368, 1232]
