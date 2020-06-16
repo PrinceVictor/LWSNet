@@ -28,17 +28,17 @@ args = parser.parse_args()
 #     disp = net.inference(left_image, right_image)
 
 def reader_creator_random_image():
-    data_shape = [1, 3, 368, 1232]
+    data_shape = [1, 3, 256, 512]
 
     def reader():
-        for i in range(10000000000):
-            yield np.random.uniform(-1, 1, size=3 * 368 * 1232).reshape(data_shape), \
-                  np.random.uniform(-1, 1, size=3 * 368 * 1232).reshape(data_shape)
+        for i in range(10):
+            yield np.random.uniform(-1, 1, size=3 * 256*512).reshape(data_shape), \
+                  np.random.uniform(-1, 1, size=3 * 256*512).reshape(data_shape)
 
     return reader
 
 def network():
-    data_shape = [5, 3, 368, 1232]
+    data_shape = [5, 3, 256, 512]
 
     left_image = fluid.data(name='left_img', dtype='float32', shape=data_shape)
     right_image = fluid.data(name='right_img', dtype='float32', shape=data_shape)
@@ -62,29 +62,29 @@ if __name__ == "__main__":
 
 
 
-    # net = Ownnet(args)
-    #
-    #
-    #
-    # train_prog = fluid.Program()
-    # train_startup = fluid.Program()
-    #
-    #
-    # with fluid.program_guard(train_prog, train_startup):
-    #     with fluid.unique_name.guard():
-    #         disp, train_loader = network()
-    #
-    # place = fluid.CUDAPlace(0)
-    # exe = fluid.Executor(place)
-    #
-    # exe.run(train_startup)
-    #
-    # train_loader.set_sample_list_generator(batch_reader, places=fluid.cuda_places(0))
-    #
-    # for data in train_loader():
-    #     predict = exe.run(program=train_prog, feed=data, fetch_list=[disp])
-    #     print("success predict", len(disp))
-    #     print(predict[0].shape)
-    #     print(type(predict[0]))
-    #     print(type(disp[0]))
-    #     # predict
+    net = Ownnet(args)
+
+
+
+    train_prog = fluid.Program()
+    train_startup = fluid.Program()
+
+
+    with fluid.program_guard(train_prog, train_startup):
+        with fluid.unique_name.guard():
+            disp, train_loader = network()
+
+    place = fluid.CUDAPlace(0)
+    exe = fluid.Executor(place)
+
+    exe.run(train_startup)
+
+    train_loader.set_sample_list_generator(batch_reader, places=fluid.cuda_places(0))
+
+    for data in train_loader():
+        predict = exe.run(program=train_prog, feed=data, fetch_list=[disp])
+        print("success predict", len(disp))
+        print(predict[0].shape)
+        print(type(predict[0]))
+        print(type(disp[0]))
+        # predict

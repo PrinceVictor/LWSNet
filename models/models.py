@@ -129,6 +129,8 @@ class Ownnet():
 
         pred = []
 
+
+
         for scale in range(len(feats_l)):
             if scale > 0:
                 wflow = fluid.layers.resize_bilinear(pred[scale - 1],

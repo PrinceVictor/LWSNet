@@ -34,8 +34,6 @@ class ImageLoad():
 
     def create_reader(self):
 
-        data_shape = [1, 3, 368, 1232]
-
         img_len = len(self.left)
         training = self.training
 
@@ -68,18 +66,13 @@ class ImageLoad():
                     right_img = right_img[h-368:h, w-1232:w, :]
                     gt = gt[h-368:h, w-1232:w, :]
 
+                left_img = left_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
+                right_img = right_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
+                gt = gt.transpose(2, 0, 1)[np.newaxis,:,:,:]
+
                 yield left_img, right_img, gt
 
         return reader
-
-def reader_creator_random_image():
-    data_shape = [10, 3, 368, 1232]
-
-    def reader():
-        for i in range(10):
-            yield np.random.uniform(-1, 1, size=3*368*1232).reshape(data_shape), \
-                  np.random.uniform(-1, 1, size=3*368*1232).reshape(data_shape)
-    return reader
 
 if __name__ == "__main__":
 
