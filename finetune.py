@@ -104,7 +104,7 @@ def main():
             adam.minimize(train_sum_loss)
 
     if args.resume:
-        fluid.io.load_persistables(executor=exe, dirname="results/model", filename="mymodel",
+        fluid.io.load_persistables(executor=exe, dirname="results/model", filename="kitti_finetune",
                                    main_program=train_prog)
 
     test_prog = train_prog.clone(for_test=True)
@@ -141,15 +141,13 @@ def main():
             print("Train: epoch {}, batch_id {} sum_loss {} stage_loss {}" .format(epoch,
                                                                                    batch_id,
                                                                                    sum_losses_rec/(batch_id+1),
-                                                                                   stage_loss_list/(batch_id+1)))
-
-            break
+                                                                                   stage_loss_list.reshape(-1)/(batch_id+1)))
 
         if sum_losses_rec / (batch_id + 1) < sum_loss_check:
             # fluid.io.save_inference_model(dirname="results/model",
             #                               feeded_var_names=["left_img", "right_img"],
             #                               target_vars=[ouput], executor=exe)
-            fluid.io.save_persistables(executor=exe, dirname="results/model", filename="mymodel", main_program=train_prog)
+            fluid.io.save_persistables(executor=exe, dirname="results/model", filename="kitti_finetune", main_program=train_prog)
             print("save model param success")
 
         for batch_id, data in enumerate(test_loader()):
