@@ -27,7 +27,7 @@ def convbn(input, channel,
                                    act=bn_activation,
                                    param_attr=bn_param_attr,
                                    bias_attr=bn_bias_attr,
-                                   in_place=True)
+                                   in_place=False)
 
 def deconvbn(input, channel,
            kernel_size, stride, padding, dilation=1,
@@ -47,7 +47,7 @@ def deconvbn(input, channel,
                                    act=bn_activation,
                                    param_attr=bn_param_attr,
                                    bias_attr=bn_bias_attr,
-                                   in_place=True)
+                                   in_place=False)
 
 def batch_relu_conv3d(input, channel,
                       kernel_size=3, stride=1, padding=1, bn3d=True,
@@ -60,7 +60,7 @@ def batch_relu_conv3d(input, channel,
                                          act=bn_activation,
                                          param_attr=bn_param_attr,
                                          bias_attr=bn_bias_attr,
-                                         in_place=True)
+                                         in_place=False)
     else:
         output = fluid.layers.relu(input)
 
@@ -77,7 +77,7 @@ def preconv2d(input, channel,kernel_size, stride, pad, dilation=1, bn=True):
     if bn:
         output = fluid.layers.batch_norm(input=input,
                                          act='relu',
-                                         in_place=True)
+                                         in_place=False)
     else:
         output = fluid.layers.relu(input)
 
@@ -94,11 +94,11 @@ def preconv2d(input, channel,kernel_size, stride, pad, dilation=1, bn=True):
 
 def preconv2d_depthseperated(input, channel,
                              kernel_size, stride, pad,
-                             dilation=1, bn=True, seperated=False):
+                             dilation=1, bn=False, seperated=False):
     if bn:
         output = fluid.layers.batch_norm(input=input,
                                          act='relu',
-                                         in_place=True)
+                                         in_place=False)
     else:
         output = fluid.layers.relu(input)
 

@@ -14,7 +14,7 @@ def img_loader(path):
 
 
 def disp_loader(path):
-    img = cv2.imread(path)
+    img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     img = img.astype(np.float32)
     img = img / 255.0 * 2.0 - 1.0
 
@@ -47,6 +47,7 @@ class ImageLoad():
                 left_img = self.img_loader(left)
                 right_img = self.img_loader(right)
                 gt = self.disp_loader(disp_l)
+                # print('gt_shape', gt.shape)
 
                 if training:
                     h, w, c = left_img.shape
@@ -57,7 +58,7 @@ class ImageLoad():
 
                     left_img = left_img[y1:y1+th, x1:x1+tw, :]
                     right_img = right_img[y1:y1+th, x1:x1+tw, :]
-                    gt = gt[y1:y1+th, x1:x1+tw, :]
+                    gt = gt[y1:y1+th, x1:x1+tw]
 
                 else:
                     h, w, c = left_img.shape
@@ -68,7 +69,7 @@ class ImageLoad():
 
                 left_img = left_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
                 right_img = right_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
-                gt = gt.transpose(2, 0, 1)[np.newaxis,:,:,:]
+                gt = gt.transpose(0, 1)[np.newaxis,np.newaxis,:,:]
 
                 yield left_img, right_img, gt
 
