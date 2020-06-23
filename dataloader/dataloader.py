@@ -8,7 +8,7 @@ import os
 def img_loader(path):
     img = cv2.imread(path)
     img = img[:,:,::-1].astype(np.float32)
-    img = img / 255.0 * 2.0 - 1.0
+    img = img / 256.0 * 2.0 - 1.0
 
     return img
 
@@ -16,7 +16,7 @@ def img_loader(path):
 def disp_loader(path):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     img = img.astype(np.float32)
-    img = img / 255.0 * 2.0 - 1.0
+    img = img / 256.0
 
     return img
 
@@ -63,9 +63,18 @@ class ImageLoad():
                 else:
                     h, w, c = left_img.shape
 
-                    left_img = left_img[h-368:h, w-1232:w, :]
-                    right_img = right_img[h-368:h, w-1232:w, :]
-                    gt = gt[h-368:h, w-1232:w, :]
+                    th, tw = 256, 512
+
+                    x1 = np.random.randint(0, w - tw)
+                    y1 = np.random.randint(0, h - th)
+
+                    left_img = left_img[y1:y1 + th, x1:x1 + tw, :]
+                    right_img = right_img[y1:y1 + th, x1:x1 + tw, :]
+                    gt = gt[y1:y1 + th, x1:x1 + tw]
+
+                    # left_img = left_img[h-368:h, w-1232:w, :]
+                    # right_img = right_img[h-368:h, w-1232:w, :]
+                    # gt = gt[h-368:h, w-1232:w]
 
                 left_img = left_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
                 right_img = right_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
