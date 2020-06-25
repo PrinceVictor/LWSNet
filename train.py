@@ -10,18 +10,18 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='/home/victor/DATA/sceneflow')
+parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/sceneflow')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
 parser.add_argument('--channels_3d', type=int, default=8, help='number of initial channels 3d feature extractor ')
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
-parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=10)
-parser.add_argument('--train_batch_size', type=int, default=1)
-parser.add_argument('--test_batch_size', type=int, default=1)
-parser.add_argument('--gpu_id', type=int, default=0)
+parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--test_batch_size', type=int, default=8)
+parser.add_argument('--gpu_id', type=int, default=3)
 parser.add_argument('--resume', action='store_true', default=False,)
 
 args = parser.parse_args()
@@ -45,21 +45,61 @@ def network(stages, training = False):
     left_image = fluid.data(name='left_img', dtype='float32', shape=img_data_shape)
     right_image = fluid.data(name='right_img', dtype='float32', shape=img_data_shape)
     groundtruth = fluid.data(name='gt', dtype='float32', shape=disp_data_shape)
+    compared = fluid.layers.fill_constant([train_batch_size*1*256*512, 1], dtype='float32', value=192.0)
 
     data_loader = fluid.io.DataLoader.from_generator(feed_list=[left_image, right_image, groundtruth],
                                                      iterable=True,
-                                                     capacity=32)
+                                                     capacity=16,
+                                                     use_double_buffer=True,
+                                                     use_multiprocess=True)
 
     output = net.inference(left_image, right_image)
-    gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
+
+    # gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
+    groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
+
+    mask = (groundtruth >= compared)
+
+    groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
+    for index in range(stages):
+        output[index] = fluid.layers.reshape(x=output[index], shape=[-1, 1])
+
+    ie1 = fluid.layers.IfElse(mask)
+
+    with ie1.true_block():
+        gt = ie1.input(x=groundtruth)
+        gt = gt - gt
+        out1 = ie1.input(x=output[0])
+        out1 = out1 - out1
+        out2 = ie1.input(x=output[1])
+        out2 = out2 - out2
+        out3 = ie1.input(x=output[2])
+        out3 = out3 - out3
+        out4 = ie1.input(x=output[3])
+        out4 = out4 - out4
+        ie1.output(gt, out1, out2, out3, out4)
+    with ie1.false_block():
+        gt = ie1.input(x=groundtruth)
+        out1 = ie1.input(x=output[0])
+        out2 = ie1.input(x=output[1])
+        out3 = ie1.input(x=output[2])
+        out4 = ie1.input(x=output[3])
+        ie1.output(gt, out1, out2, out3, out4)
+
+    outputs = ie1()
+
+    groundtruth = fluid.layers.reshape(outputs[0], shape=[train_batch_size, 1, 256, 512])
+    output[0] = fluid.layers.reshape(outputs[1], shape=[train_batch_size, 1, 256, 512])
+    output[1] = fluid.layers.reshape(outputs[2], shape=[train_batch_size, 1, 256, 512])
+    output[2] = fluid.layers.reshape(outputs[3], shape=[train_batch_size, 1, 256, 512])
+    output[3] = fluid.layers.reshape(outputs[4], shape=[train_batch_size, 1, 256, 512])
 
     sum_loss = fluid.layers.zeros(shape=[1], dtype="float32")
     tem_stage_loss = []
 
     for index in range(stages):
-        temp_predict = fluid.layers.clip(output[index], min=0.0, max=192.0)
-        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(temp_predict, gt),
-                                             dim=0)
+        # temp_predict = fluid.layers.clip(output[index], min=0.0, max=192.0)
+        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(output[index], groundtruth), dim=0)
         temp_loss = temp_loss * args.loss_weights[index]
         tem_stage_loss.append(temp_loss)
         sum_loss += temp_loss
@@ -86,10 +126,10 @@ def main():
     test_loader = dataloader.sceneflow_dataloader(test_left_img, test_right_img, test_left_disp, training=False)
 
     train_reader = train_loader.create_reader()
-    train_batch_reader = paddle.batch(reader=train_reader, batch_size=args.train_batch_size)
+    train_batch_reader = paddle.batch(reader=train_reader, batch_size=args.train_batch_size, drop_last=True)
 
     test_reader = test_loader.create_reader()
-    test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size)
+    test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size, drop_last=True)
 
     train_prog = fluid.default_main_program()
     train_startup = fluid.default_startup_program()
@@ -129,7 +169,6 @@ def main():
         error_3pixel = 0
 
         for batch_id, data in enumerate(train_loader()):
-
             predict, stage_losses, sum_losses = exe.run(program=train_prog,
                                                         feed=data,
                                                         fetch_list=[train_ouput.name,
