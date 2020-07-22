@@ -19,10 +19,10 @@ parser.add_argument('--channels_3d', type=int, default=8, help='number of initia
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
-parser.add_argument('--epoch', type=int, default=10)
-parser.add_argument('--train_batch_size', type=int, default=8)
-parser.add_argument('--test_batch_size', type=int, default=8)
-parser.add_argument('--gpu_id', type=int, default=0)
+parser.add_argument('--epoch', type=int, default=50)
+parser.add_argument('--train_batch_size', type=int, default=4)
+parser.add_argument('--test_batch_size', type=int, default=4)
+parser.add_argument('--gpu_id', type=int, default=3)
 parser.add_argument('--resume', action='store_true', default=False,)
 
 args = parser.parse_args()
@@ -49,67 +49,33 @@ def network(stages, training = False):
     left_image = fluid.data(name='left_img', dtype='float32', shape=img_data_shape)
     right_image = fluid.data(name='right_img', dtype='float32', shape=img_data_shape)
     groundtruth = fluid.data(name='gt', dtype='float32', shape=disp_data_shape)
-    compared = fluid.layers.fill_constant([train_batch_size*1*256*512, 1], dtype='float32', value=0.0)
+    # compared = fluid.layers.fill_constant([train_batch_size*1*256*512, 1], dtype='float32', value=0.0)
 
     data_loader = fluid.io.DataLoader.from_generator(feed_list=[left_image, right_image, groundtruth],
                                                      iterable=True,
                                                      capacity=32)
 
     output = net.inference(left_image, right_image)
-    # gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
+    gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
 
-    groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
-
-    mask = (groundtruth < compared)
-
-    groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
-    for index in range(stages):
-        output[index] = fluid.layers.reshape(x=output[index], shape=[-1, 1])
-
-    ie1 = fluid.layers.IfElse(mask)
-
-    with ie1.true_block():
-        gt = ie1.input(x=groundtruth)
-        gt = gt - gt
-        out1 = ie1.input(x=output[0])
-        out1 = out1 - out1
-        out2 = ie1.input(x=output[1])
-        out2 = out2 - out2
-        out3 = ie1.input(x=output[2])
-        out3 = out3 - out3
-        out4 = ie1.input(x=output[3])
-        out4 = out4 - out4
-        ie1.output(gt, out1, out2, out3, out4)
-    with ie1.false_block():
-        gt = ie1.input(x=groundtruth)
-        out1 = ie1.input(x=output[0])
-        out2 = ie1.input(x=output[1])
-        out3 = ie1.input(x=output[2])
-        out4 = ie1.input(x=output[3])
-        ie1.output(gt, out1, out2, out3, out4)
-
-    outputs = ie1()
-
-    groundtruth = fluid.layers.reshape(outputs[0], shape=[train_batch_size, 1, 256, 512])
-    output[0] = fluid.layers.reshape(outputs[1], shape=[train_batch_size, 1, 256, 512])
-    output[1] = fluid.layers.reshape(outputs[2], shape=[train_batch_size, 1, 256, 512])
-    output[2] = fluid.layers.reshape(outputs[3], shape=[train_batch_size, 1, 256, 512])
-    output[3] = fluid.layers.reshape(outputs[4], shape=[train_batch_size, 1, 256, 512])
+    # groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
+    # mask = (groundtruth < compared)
+    # for index in range(stages):
+    #     output[index] = fluid.layers.reshape(x=output[index], shape=[-1, 1])
 
     sum_loss = fluid.layers.zeros(shape=[1], dtype="float32")
     tem_stage_loss = []
 
     for index in range(stages):
         # temp_predict = fluid.layers.clip(output[index], min=0.0, max=192.0)
-        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(output[index], groundtruth),
-                                             dim=0)
+        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(output[index], gt))
         temp_loss = temp_loss * args.loss_weights[index]
         tem_stage_loss.append(temp_loss)
         sum_loss += temp_loss
 
     # stage_loss = fluid.layers.stack([stage_loss[0], stage_loss[1], stage_loss[2], stage_loss[3]], axis=-1)
     stage_loss = fluid.layers.concat(input=tem_stage_loss, axis=0)
-    predict_ouput = fluid.layers.concat(input=output, axis=0)
+    predict_ouput = fluid.layers.stack(x=output, axis=0)
 
     return predict_ouput, stage_loss, sum_loss, data_loader
 
@@ -132,11 +98,12 @@ def main():
     test_reader = test_loader.create_reader()
     test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size)
 
-    train_prog = fluid.default_main_program()
-    train_startup = fluid.default_startup_program()
 
     place = fluid.CUDAPlace(gpu_id)
     exe = fluid.Executor(place)
+
+    train_prog = fluid.default_main_program()
+    train_startup = fluid.default_startup_program()
 
     with fluid.program_guard(train_prog, train_startup):
         with fluid.unique_name.guard():
@@ -161,12 +128,12 @@ def main():
     train_loader.set_sample_list_generator(train_batch_reader, places=fluid.cuda_places(gpu_id))
     test_loader.set_sample_list_generator(test_batch_reader, places=fluid.cuda_places(gpu_id))
 
-    sum_loss_check = np.inf
+    error_3pixel_check = np.inf
 
     for epoch in range(args.epoch):
         stage_loss_list = np.zeros((1, 4), dtype=np.float32)
         sum_losses_rec = 0
-        error_3pixel_list = np.zeros((1, 4), dtype=np.float32)
+        error_3pixel_list = np.zeros((4), dtype=np.float32)
         error_3pixel = 0
 
         for batch_id, data in enumerate(train_loader()):
@@ -179,17 +146,10 @@ def main():
 
             stage_loss_list += stage_losses
             sum_losses_rec += sum_losses
-            print("Train: epoch {}, batch_id {} sum_loss {} stage_loss {}" .format(epoch,
+            print("Train: epoch {}, batch_id {} sum_loss {}\t stage_loss {}" .format(epoch,
                                                                                    batch_id,
-                                                                                   sum_losses_rec/(batch_id+1),
-                                                                                   stage_loss_list.reshape(-1)/(batch_id+1)))
-
-        if sum_losses_rec / (batch_id + 1) < sum_loss_check:
-            # fluid.io.save_inference_model(dirname="results/model",
-            #                               feeded_var_names=["left_img", "right_img"],
-            #                               target_vars=[ouput], executor=exe)
-            fluid.io.save_persistables(executor=exe, dirname="results/model", filename="kitti_finetune", main_program=train_prog)
-            print("save model param success")
+                                                                                   np.round(sum_losses_rec/(batch_id+1), 3),
+                                                                                   np.round(stage_loss_list.reshape(-1)/(batch_id+1) , 3)))
 
         for batch_id, data in enumerate(test_loader()):
 
@@ -198,13 +158,19 @@ def main():
                                                              fetch_list=[ouput.name, stage_loss.name, sum_loss.name, "gt"])
 
             for stage in range(stages):
-                error_3pixel_list[:,stage] += error_estimating(predict[stage], gt)
+                error_3pixel_list[stage] += error_estimating(predict[stage], gt)
                 error_3pixel = sum(error_3pixel_list)
 
-            print("Test: epoch {}, batch_id {} error 3pixel {} stage_loss {}" .format(epoch,
+            print("Test: epoch {}, batch_id {} error 3pixel {}\t error_3pixel_stage {}" .format(epoch,
                                                                                   batch_id,
-                                                                                  error_3pixel/(batch_id+1),
-                                                                                  error_3pixel_list/(batch_id+1)))
+                                                                                  round(error_3pixel/(batch_id+1), 3),
+                                                                                  np.round(error_3pixel_list/(batch_id+1), 3)))
+
+        if error_3pixel/(batch_id+1) < error_3pixel_check:
+
+            fluid.io.save_persistables(executor=exe, dirname="results/model", filename="kitti_finetune", main_program=train_prog)
+            fluid.io.save_inference_model(dirname="results/inference", feeded_var_names=["left_img", "right_img"], target_vars=[train_ouput], executor=exe)
+            print("save model param success")
 
 def name_check(var):
     return True
