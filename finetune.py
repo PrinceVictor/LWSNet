@@ -3,6 +3,8 @@ import paddle
 import paddle.fluid as fluid
 import cv2
 
+from paddle.fluid.dygraph.base import to_variable
+
 from models.models import *
 from dataloader import kitti2015load as kitti
 from dataloader import dataloader
@@ -97,6 +99,12 @@ def main():
     test_reader = test_loader.create_reader()
     test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size)
 
+    with fluid.dygraph.guard():
+
+        model = Ownnet()
+
+        adam = fluid.optimizer.AdamOptimizer(learning_rate=args.lr, parameter_list=model.parameters())
+
 
     place = fluid.CUDAPlace(gpu_id)
     exe = fluid.Executor(place)
@@ -116,7 +124,7 @@ def main():
                                                        warmup_steps, start_lr, end_lr)
 
             train_ouput, train_stage_loss, train_sum_loss, train_loader = network(stages, training=True)
-            adam = fluid.optimizer.Adam(learning_rate=decayed_lr)
+
             adam.minimize(train_sum_loss)
 
     if args.resume:

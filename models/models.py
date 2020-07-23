@@ -4,8 +4,9 @@ import paddle.fluid as fluid
 from models.submodules import *
 from utils.utils import *
 
-class Ownnet():
+class Ownnet(fluid.dygraph.Layer):
     def __init__(self, args):
+        super(Ownnet, self).__init__()
 
         self.maxdisplist = args.maxdisplist
         self.layers_3d = args.layers_3d
@@ -118,7 +119,7 @@ class Ownnet():
 
         return cost
 
-    def inference(self, left_input, right_input):
+    def foward(self, left_input, right_input):
 
         img_size = left_input.shape
 
