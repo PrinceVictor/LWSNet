@@ -26,7 +26,7 @@ def img_loader(path):
 def disp_loader(path):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     img = img.astype(np.float32)
-    img = img / 256.0
+    img = img
 
     return img
 
@@ -75,12 +75,12 @@ class sceneflow_dataloader():
                     h, w, c = left_img.shape
                     th, tw = 256, 512
 
-                    x1 = np.random.randint(0, w - tw)
-                    y1 = np.random.randint(0, h - th)
+                    # x1 = np.random.randint(0, w - tw)
+                    # y1 = np.random.randint(0, h - th)
 
-                    left_img = left_img[y1:y1 + th, x1:x1 + tw, :]
-                    right_img = right_img[y1:y1 + th, x1:x1 + tw, :]
-                    gt = gt[y1:y1 + th, x1:x1 + tw]
+                    left_img = left_img[0:0 + th, 0:0 + tw, :]
+                    right_img = right_img[0:0 + th, 0:0 + tw, :]
+                    gt = gt[0:0 + th, 0:0 + tw]
 
                     # left_img = left_img[h-368:h, w-1232:w, :]
                     # right_img = right_img[h-368:h, w-1232:w, :]
@@ -118,6 +118,7 @@ class ImageLoad():
                 left = self.left[i]
                 right = self.right[i]
                 disp_l = self.disp_l[i]
+                # print(left)
 
                 left_img = self.img_loader(left)
                 right_img = self.img_loader(right)
@@ -126,6 +127,7 @@ class ImageLoad():
 
                 if training:
                     h, w, c = left_img.shape
+                    # print(left_img.shape)
                     th, tw = 256, 512
 
                     x1 = np.random.randint(0, w-tw)
@@ -142,6 +144,8 @@ class ImageLoad():
 
                     x1 = np.random.randint(0, w - tw)
                     y1 = np.random.randint(0, h - th)
+                    x1 = 0
+                    y1 = 0
 
                     left_img = left_img[y1:y1 + th, x1:x1 + tw, :]
                     right_img = right_img[y1:y1 + th, x1:x1 + tw, :]

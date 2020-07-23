@@ -1,6 +1,7 @@
 import argparse
 import paddle
 import paddle.fluid as fluid
+import cv2
 
 from models.models import *
 from dataloader import kitti2015load as kitti
@@ -58,17 +59,15 @@ def network(stages, training = False):
     output = net.inference(left_image, right_image)
     gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
 
-    # groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
-    # mask = (groundtruth < compared)
-    # for index in range(stages):
-    #     output[index] = fluid.layers.reshape(x=output[index], shape=[-1, 1])
-
     sum_loss = fluid.layers.zeros(shape=[1], dtype="float32")
     tem_stage_loss = []
 
     for index in range(stages):
-        # temp_predict = fluid.layers.clip(output[index], min=0.0, max=192.0)
-        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(output[index], gt))
+
+        gt_output_mul = fluid.layers.elementwise_mul(output[index], gt)
+        mask_output = fluid.layers.elementwise_div(gt_output_mul, gt+1e-9)
+
+        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt) / (256*512))
         temp_loss = temp_loss * args.loss_weights[index]
         tem_stage_loss.append(temp_loss)
         sum_loss += temp_loss
@@ -107,8 +106,17 @@ def main():
 
     with fluid.program_guard(train_prog, train_startup):
         with fluid.unique_name.guard():
+            boundaries = [100, 200]
+            lr_steps = [1e-4, 1e-5, 1e-6]
+            learning_rate = fluid.layers.piecewise_decay(boundaries, lr_steps)
+            warmup_steps = 50
+            start_lr = 1e-3
+            end_lr = 1e-4
+            decayed_lr = fluid.layers.linear_lr_warmup(learning_rate,
+                                                       warmup_steps, start_lr, end_lr)
+
             train_ouput, train_stage_loss, train_sum_loss, train_loader = network(stages, training=True)
-            adam = fluid.optimizer.Adam(learning_rate=args.lr)
+            adam = fluid.optimizer.Adam(learning_rate=decayed_lr)
             adam.minimize(train_sum_loss)
 
     if args.resume:
@@ -138,11 +146,11 @@ def main():
 
         for batch_id, data in enumerate(train_loader()):
 
-            predict, stage_losses, sum_losses = exe.run(program=train_prog,
-                                                        feed=data,
-                                                        fetch_list=[train_ouput.name,
-                                                                    train_stage_loss.name,
-                                                                    train_sum_loss.name])
+            predict, stage_losses, sum_losses, gt = exe.run(program=train_prog,
+                                                            feed=data,
+                                                            fetch_list=[train_ouput.name,
+                                                                        train_stage_loss.name,
+                                                                        train_sum_loss.name, "gt"])
 
             stage_loss_list += stage_losses
             sum_losses_rec += sum_losses
@@ -150,6 +158,7 @@ def main():
                                                                                    batch_id,
                                                                                    np.round(sum_losses_rec/(batch_id+1), 3),
                                                                                    np.round(stage_loss_list.reshape(-1)/(batch_id+1) , 3)))
+
 
         for batch_id, data in enumerate(test_loader()):
 
@@ -161,27 +170,35 @@ def main():
                 error_3pixel_list[stage] += error_estimating(predict[stage], gt)
                 error_3pixel = sum(error_3pixel_list)
 
+
             print("Test: epoch {}, batch_id {} error 3pixel {}\t error_3pixel_stage {}" .format(epoch,
                                                                                   batch_id,
                                                                                   round(error_3pixel/(batch_id+1), 3),
                                                                                   np.round(error_3pixel_list/(batch_id+1), 3)))
 
+            # for batch_size_I in range(args.test_batch_size):
+            #
+            #     disp = (predict[3][batch_size_I][0]).astype(np.uint8)
+            #     disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.2, beta=0), cv2.COLORMAP_JET)
+            #
+            #     gt_disp = (gt[batch_size_I][0]).astype(np.uint8)
+            #     gt_disp = cv2.applyColorMap(cv2.convertScaleAbs(gt_disp, alpha=1.2, beta=0), cv2.COLORMAP_JET)
+            #     cv2.imshow("disp", disp)
+            #     cv2.imshow("gt_disp", gt_disp)
+            #     cv2.waitKey(0)
+
+
+
         if error_3pixel/(batch_id+1) < error_3pixel_check:
+            error_3pixel_check = error_3pixel/(batch_id+1)
 
             fluid.io.save_persistables(executor=exe, dirname="results/model", filename="kitti_finetune", main_program=train_prog)
             fluid.io.save_inference_model(dirname="results/inference", feeded_var_names=["left_img", "right_img"], target_vars=[train_ouput], executor=exe)
             print("save model param success")
 
-def name_check(var):
-    return True
-    # if "left_img" in var.name:
-    #     return True
-    # elif "right_img" in var.name:
-    #     return True
-    # else:
-
 def error_estimating(disp, ground_truth, maxdisp=192):
     gt = ground_truth
+    # print(disp.shape, ground_truth.shape, np.max(gt), np.min(gt))
     mask = gt > 0
     mask = mask * (gt < maxdisp)
 

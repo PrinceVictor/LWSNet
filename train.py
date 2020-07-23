@@ -57,18 +57,14 @@ def network(stages, training = False):
 
     gt = fluid.layers.clip(groundtruth, min=0.0, max=192.0)
 
-    # groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
-    # mask = (groundtruth >= compared)
-    # groundtruth = fluid.layers.reshape(x=groundtruth, shape=[-1, 1])
-    # for index in range(stages):
-    #     output[index] = fluid.layers.reshape(x=output[index], shape=[-1, 1])
-
     sum_loss = fluid.layers.zeros(shape=[1], dtype="float32")
     tem_stage_loss = []
 
     for index in range(stages):
-        # temp_predict = fluid.layers.clip(output[index], min=0.0, max=192.0)
-        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(output[index], gt), dim=0)
+        gt_output_mul = fluid.layers.elementwise_mul(output[index], gt)
+        mask_output = fluid.layers.elementwise_div(gt_output_mul, gt + 1e-9)
+
+        temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt) / (256 * 512))
         temp_loss = temp_loss * args.loss_weights[index]
         tem_stage_loss.append(temp_loss)
         sum_loss += temp_loss
@@ -168,6 +164,8 @@ def main():
                                                                                   error_3pixel_list/(batch_id+1)))
 
         if error_3pixel/(batch_id+1) < error_3pixel_check:
+
+            error_3pixel_check = error_3pixel / (batch_id + 1)
 
             fluid.io.save_persistables(executor=exe, dirname="results/model", filename="scene_flow", main_program=train_prog)
             fluid.io.save_inference_model(dirname="results/inference", feeded_var_names=["left_img", "right_img"], target_vars=[train_ouput], executor=exe)
