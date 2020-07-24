@@ -15,19 +15,19 @@ def default_loader(path):
 def disparity_loader(path):
     return rp.readPFM(path)
 
+def disparity_loader2(path):
+    return Image.open(path)
+
 def img_loader(path):
     img = cv2.imread(path)
     img = img[:,:,::-1].astype(np.float32)
     img = img / 256.0 * 2.0 - 1.0
-
     return img
-
 
 def disp_loader(path):
     img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     img = img.astype(np.float32)
-    img = img
-
+    img = img / 256.0
     return img
 
 class sceneflow_dataloader():
@@ -57,38 +57,29 @@ class sceneflow_dataloader():
                 dataL, scaleL = self.dploader(disp_L)
                 gt = np.ascontiguousarray(dataL, dtype=np.float32)
 
-                left_img = np.array(left_img).astype(np.float32)
-                right_img = np.array(right_img).astype(np.float32)
-
                 if training:
-                    h, w, c = left_img.shape
+                    w, h = left_img.size
                     th, tw = 256, 512
 
                     x1 = np.random.randint(0, w - tw)
                     y1 = np.random.randint(0, h - th)
 
-                    left_img = left_img[y1:y1 + th, x1:x1 + tw, :]
-                    right_img = right_img[y1:y1 + th, x1:x1 + tw, :]
+                    left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
+                    right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
                     gt = gt[y1:y1 + th, x1:x1 + tw]
 
                 else:
-                    h, w, c = left_img.shape
-                    th, tw = 256, 512
+                    w, h = left_img.size
+                    left_img = left_img.crop((w - 960, h - 544, w, h))
+                    right_img = right_img.crop((w - 960, h - 544, w, h))
 
-                    # x1 = np.random.randint(0, w - tw)
-                    # y1 = np.random.randint(0, h - th)
 
-                    left_img = left_img[0:0 + th, 0:0 + tw, :]
-                    right_img = right_img[0:0 + th, 0:0 + tw, :]
-                    gt = gt[0:0 + th, 0:0 + tw]
+                left_img = np.ascontiguousarray(left_img, dtype=np.float32) / 256 * 2 - 1.0
+                right_img = np.ascontiguousarray(right_img, dtype=np.float32) / 256 * 2 - 1.0
 
-                    # left_img = left_img[h-368:h, w-1232:w, :]
-                    # right_img = right_img[h-368:h, w-1232:w, :]
-                    # gt = gt[h-368:h, w-1232:w]
-
-                left_img = left_img.transpose(2, 0, 1)[np.newaxis, :, :, :]
-                right_img = right_img.transpose(2, 0, 1)[np.newaxis, :, :, :]
-                gt = gt.transpose(0, 1)[np.newaxis, np.newaxis, :, :]
+                left_img = left_img.transpose(2, 0, 1)
+                right_img = right_img.transpose(2, 0, 1)
+                gt = gt.transpose(0, 1)[np.newaxis, :, :]
 
                 yield left_img, right_img, gt
 
@@ -98,7 +89,7 @@ class sceneflow_dataloader():
 
 class ImageLoad():
 
-    def __init__(self, left, right, disp_l, img_loader=img_loader, disp_loader=disp_loader, training=False):
+    def __init__(self, left, right, disp_l, img_loader=default_loader, disp_loader=disparity_loader2, training=False):
 
         self.left = left
         self.right = right
@@ -126,38 +117,34 @@ class ImageLoad():
                 # print('gt_shape', gt.shape)
 
                 if training:
-                    h, w, c = left_img.shape
-                    # print(left_img.shape)
-                    th, tw = 256, 512
-
-                    x1 = np.random.randint(0, w-tw)
-                    y1 = np.random.randint(0, h-th)
-
-                    left_img = left_img[y1:y1+th, x1:x1+tw, :]
-                    right_img = right_img[y1:y1+th, x1:x1+tw, :]
-                    gt = gt[y1:y1+th, x1:x1+tw]
-
-                else:
-                    h, w, c = left_img.shape
-
+                    w, h = left_img.size
                     th, tw = 256, 512
 
                     x1 = np.random.randint(0, w - tw)
                     y1 = np.random.randint(0, h - th)
-                    x1 = 0
-                    y1 = 0
 
-                    left_img = left_img[y1:y1 + th, x1:x1 + tw, :]
-                    right_img = right_img[y1:y1 + th, x1:x1 + tw, :]
+                    left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
+                    right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
+
+                    gt = np.ascontiguousarray(gt, dtype=np.float32) / 256
                     gt = gt[y1:y1 + th, x1:x1 + tw]
 
-                    # left_img = left_img[h-368:h, w-1232:w, :]
-                    # right_img = right_img[h-368:h, w-1232:w, :]
-                    # gt = gt[h-368:h, w-1232:w]
+                else:
+                    w, h = left_img.size
 
-                left_img = left_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
-                right_img = right_img.transpose(2, 0, 1)[np.newaxis,:,:,:]
-                gt = gt.transpose(0, 1)[np.newaxis,np.newaxis,:,:]
+                    left_img = left_img.crop((w - 1232, h - 368, w, h))
+                    right_img = right_img.crop((w - 1232, h - 368, w, h))
+                    w1, h1 = left_img.size
+
+                    gt = gt.crop((w - 1232, h - 368, w, h))
+                    gt = np.ascontiguousarray(gt, dtype=np.float32) / 256
+
+                left_img = np.ascontiguousarray(left_img, dtype=np.float32) / 256 * 2 - 1.0
+                right_img = np.ascontiguousarray(right_img, dtype=np.float32) / 256 * 2 - 1.0
+
+                left_img = left_img.transpose(2, 0, 1)
+                right_img = right_img.transpose(2, 0, 1)
+                gt = gt.transpose(0, 1)[np.newaxis,:,:]
 
                 yield left_img, right_img, gt
 

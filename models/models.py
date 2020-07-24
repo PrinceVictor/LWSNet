@@ -20,13 +20,9 @@ class Ownnet(fluid.dygraph.Layer):
             net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
 
-        self.refinement1_left = refinement1(channels=32)
-        self.refinement1_disp = refinement1(channels=32)
-        self.refinement2 = refinement2(channels=32)
-
-
-    def feature_extractor(self, input):
-        return self.feature_extraction.inference(input)
+        self.refinement1_left = refinement1(in_channels=3, out_channels=32)
+        self.refinement1_disp = refinement1(in_channels=1, out_channels=32)
+        self.refinement2 = refinement2(in_channels=64, out_channels=32)
 
     def warp(self, x, disp):
         """
@@ -119,18 +115,18 @@ class Ownnet(fluid.dygraph.Layer):
 
         return cost
 
-    def foward(self, left_input, right_input):
+    def forward(self, left_input, right_input):
 
         img_size = left_input.shape
 
-        feats_l = self.feature_extractor(left_input)
-        feats_r = self.feature_extractor(right_input)
+        # feats_l = self.feature_extractor(left_input)
+        # feats_r = self.feature_extractor(right_input)
+        feats_l = self.feature_extraction(left_input)
+        feats_r = self.feature_extraction(right_input)
 
         # return feats_l
 
         pred = []
-
-
 
         for scale in range(len(feats_l)):
             if scale > 0:
@@ -150,7 +146,7 @@ class Ownnet(fluid.dygraph.Layer):
                                              stride=1)
 
             cost = unsqueeze(cost, [1])
-            cost = self.volume_postprocess[scale].post_3dconvs(cost) + cost
+            cost = self.volume_postprocess[scale](cost) + cost
             cost = fluid.layers.squeeze(cost, [1])
 
             if scale == 0:
@@ -172,9 +168,9 @@ class Ownnet(fluid.dygraph.Layer):
                                                        out_shape=[img_size[2], img_size[3]])
                 pred.append(disp_up+pred[scale-1])
 
-        refined_left = self.refinement1_left.inference(left_input)
-        refined_disp = self.refinement1_disp.inference(pred[-1])
-        disp = self.refinement2.inference(input=fluid.layers.concat([refined_left, refined_disp], 1))
+        refined_left = self.refinement1_left(left_input)
+        refined_disp = self.refinement1_disp(pred[-1])
+        disp = self.refinement2(input=fluid.layers.concat([refined_left, refined_disp], 1))
         disp_up = fluid.layers.resize_bilinear(input=disp,
                                                out_shape=[img_size[2], img_size[3]])
         pred.append(pred[2]+disp_up)

@@ -13,41 +13,43 @@ def convbn(input, channel,
            bn_activation=None,
            conv_param_attr=None, conv_bias_attr=None,
            bn_param_attr=None, bn_bias_attr=None):
-    output = fluid.layers.conv2d(input=input,
-                                 num_filters=channel,
-                                 filter_size=kernel_size,
-                                 stride=stride,
-                                 padding=dilation if dilation>1 else padding,
-                                 dilation=dilation,
-                                 act=None,
-                                 param_attr=conv_param_attr,
-                                 bias_attr=conv_bias_attr)
 
-    return fluid.layers.batch_norm(input=output,
-                                   act=bn_activation,
-                                   param_attr=bn_param_attr,
-                                   bias_attr=bn_bias_attr,
-                                   in_place=False)
+    return fluid.dygraph.Sequential(fluid.dygraph.Conv2D(num_channels=input,
+                                                         num_filters=channel,
+                                                         filter_size=kernel_size,
+                                                         stride=stride,
+                                                         padding=dilation if dilation>1 else padding,
+                                                         dilation=dilation,
+                                                         act=None,
+                                                         param_attr=conv_param_attr,
+                                                         bias_attr=conv_bias_attr),
+                                    fluid.dygraph.BatchNorm(num_channels=channel,
+                                                            act=bn_activation,
+                                                            param_attr=bn_param_attr,
+                                                            bias_attr=bn_bias_attr,
+                                                            in_place=False))
+
+
+
 
 def deconvbn(input, channel,
-           kernel_size, stride, padding, dilation=1,
-           bn_activation=None,
-           conv_param_attr=None, conv_bias_attr=None,
-           bn_param_attr=None, bn_bias_attr=None):
-    output = fluid.layers.conv2d_transpose(input=input,
-                                           num_filters=channel,
-                                           output_size=None,
-                                           filter_size=kernel_size,
-                                           padding=padding,
-                                           stride=stride,
-                                           param_attr=conv_param_attr,
-                                           bias_attr=conv_bias_attr)
-
-    return fluid.layers.batch_norm(input=output,
-                                   act=bn_activation,
-                                   param_attr=bn_param_attr,
-                                   bias_attr=bn_bias_attr,
-                                   in_place=False)
+             kernel_size, stride, padding, dilation=1,
+             bn_activation=None,
+             conv_param_attr=None, conv_bias_attr=None,
+             bn_param_attr=None, bn_bias_attr=None):
+    return fluid.dygraph.Sequential(fluid.dygraph.Conv2DTranspose(num_channels=input,
+                                                                  num_filters=channel,
+                                                                  output_size=(None),
+                                                                  filter_size=kernel_size,
+                                                                  padding=padding,
+                                                                  stride=stride,
+                                                                  param_attr=conv_param_attr,
+                                                                  bias_attr=conv_bias_attr),
+                                    fluid.dygraph.BatchNorm(num_channels=channel,
+                                                            act=bn_activation,
+                                                            param_attr=bn_param_attr,
+                                                            bias_attr=bn_bias_attr,
+                                                            in_place=False))
 
 def batch_relu_conv3d(input, channel,
                       kernel_size=3, stride=1, padding=1, bn3d=True,
@@ -56,323 +58,322 @@ def batch_relu_conv3d(input, channel,
                       bn_param_attr=None, bn_bias_attr=None):
 
     if bn3d:
-        output = fluid.layers.batch_norm(input=input,
-                                         act=bn_activation,
-                                         param_attr=bn_param_attr,
-                                         bias_attr=bn_bias_attr,
-                                         in_place=False)
+        return fluid.dygraph.Sequential(fluid.dygraph.BatchNorm(num_channels=input,
+                                                                act=bn_activation,
+                                                                param_attr=bn_param_attr,
+                                                                bias_attr=bn_bias_attr,
+                                                                in_place=False),
+                                        fluid.dygraph.Conv3D(num_channels=input,
+                                                             num_filters=channel,
+                                                             filter_size=kernel_size,
+                                                             padding=padding,
+                                                             stride=stride,
+                                                             param_attr=conv_param_attr,
+                                                             bias_attr=conv_bias_attr))
     else:
-        output = fluid.layers.relu(input)
-
-    output = fluid.layers.conv3d(input=output,
-                                 num_filters=channel,
-                                 filter_size=kernel_size,
-                                 padding=padding,
-                                 stride=stride,
-                                 param_attr=conv_param_attr,
-                                 bias_attr=conv_bias_attr)
-    return output
+        return fluid.dygraph.Sequential(fluid.layers.relu(),
+                                        fluid.dygraph.Conv3D(num_channels=input,
+                                                             num_filters=channel,
+                                                             filter_size=kernel_size,
+                                                             padding=padding,
+                                                             stride=stride,
+                                                             param_attr=conv_param_attr,
+                                                             bias_attr=conv_bias_attr))
 
 def preconv2d(input, channel,kernel_size, stride, pad, dilation=1, bn=True):
     if bn:
-        output = fluid.layers.batch_norm(input=input,
-                                         act='relu',
-                                         in_place=False)
-    else:
-        output = fluid.layers.relu(input)
-
-    return fluid.layers.conv2d(input=output,
-                               num_filters=channel,
-                               filter_size=kernel_size,
-                               stride=stride,
-                               padding=dilation if dilation > 1 else pad,
-                               dilation=dilation,
-                               param_attr=None,
-                               bias_attr=False,)
+        return fluid.dygraph.Sequential(fluid.dygraph.BatchNorm(num_channels=input,
+                                                                act='relu',
+                                                                in_place=False),
+                                        fluid.dygraph.Conv2D(num_channels=input,
+                                                             num_filters=channel,
+                                                             filter_size=kernel_size,
+                                                             stride=stride,
+                                                             padding=dilation if dilation > 1 else pad,
+                                                             dilation=dilation,
+                                                             param_attr=layer_init_kaiming_normal(),
+                                                             bias_attr=False))
 
 
 
 def preconv2d_depthseperated(input, channel,
                              kernel_size, stride, pad,
-                             dilation=1, bn=False, seperated=False):
+                             dilation=1, bn=True, seperated=False):
     if bn:
-        output = fluid.layers.batch_norm(input=input,
-                                         act='relu',
-                                         in_place=False)
+        return fluid.dygraph.Sequential(fluid.dygraph.BatchNorm(num_channels=input,
+                                                                act='relu',
+                                                                in_place=False),
+                                        fluid.dygraph.Conv2D(num_channels=input,
+                                                             num_filters=channel,
+                                                             filter_size=kernel_size,
+                                                             stride=stride,
+                                                             padding=dilation if dilation > 1 else pad,
+                                                             dilation=dilation,
+                                                             param_attr=layer_init_kaiming_normal(),
+                                                             bias_attr=False,
+                                                             groups=input),
+                                        fluid.dygraph.Conv2D(num_channels=channel,
+                                                             num_filters=channel,
+                                                             filter_size=1,
+                                                             stride=1,
+                                                             padding=0,
+                                                             dilation=1,
+                                                             param_attr=layer_init_kaiming_normal(),
+                                                             bias_attr=False))
     else:
-        output = fluid.layers.relu(input)
-
-    output = fluid.layers.conv2d(input=output,
-                                 num_filters=output.shape[1],
-                                 filter_size=kernel_size,
-                                 stride=stride,
-                                 padding=dilation if dilation > 1 else pad,
-                                 dilation=dilation,
-                                 param_attr=None,
-                                 bias_attr=False,
-                                 groups=output.shape[1])
-    output = fluid.layers.conv2d(input=output,
-                                 num_filters=channel,
-                                 filter_size=1,
-                                 stride=1,
-                                 padding=0,
-                                 param_attr=None,
-                                 bias_attr=False)
-    return output
-
-class Post_3DConvs():
-    def __init__(self, layers, channels):
-        self.layers = layers
-        self.channels = channels
-
-    def post_3dconvs(self, input):
-        output = batch_relu_conv3d(input=input, channel=self.channels)
-        for i in range(self.layers):
-            output = batch_relu_conv3d(input=output, channel=self.channels)
-        output = batch_relu_conv3d(input=output, channel=1)
-        return output
+        return fluid.dygraph.Sequential(fluid.layers.relu(),
+                                        fluid.dygraph.Conv2D(num_channels=input,
+                                                             num_filters=channel,
+                                                             filter_size=kernel_size,
+                                                             stride=stride,
+                                                             padding=dilation if dilation > 1 else pad,
+                                                             dilation=dilation,
+                                                             param_attr=layer_init_kaiming_normal(),
+                                                             bias_attr=False,
+                                                             groups=input),
+                                        fluid.dygraph.Conv2D(num_channels=channel,
+                                                             num_filters=channel,
+                                                             filter_size=1,
+                                                             stride=1,
+                                                             padding=0,
+                                                             dilation=1,
+                                                             param_attr=layer_init_kaiming_normal(),
+                                                             bias_attr=False))
 
 
-class refinement1():
-    def __init__(self, channels):
-        self.channels = channels
+def Post_3DConvs(layers, channels):
+        output = [batch_relu_conv3d(input=1, channel=channels)]
+        for i in range(layers):
+            output = output + [batch_relu_conv3d(input=channels, channel=channels)]
+        output = output + [batch_relu_conv3d(input=channels, channel=1)]
+        return fluid.dygraph.Sequential(*output)
 
-    def inference(self, input):
-        output = fluid.layers.conv2d(input=input,
-                                     num_filters=self.channels,
-                                     filter_size=3,
-                                     stride=1,
-                                     padding=1,
-                                     param_attr=None,
-                                     bias_attr=None)
+def refinement1(in_channels, out_channels):
 
-        for k in range(4):
-            output = preconv2d_depthseperated(input=output,
-                                              channel=self.channels,
-                                              kernel_size=3,
-                                              stride=1,
-                                              pad=1,
-                                              dilation=2**(k+1))
+    output = [fluid.dygraph.Conv2D(num_channels=in_channels,
+                                   num_filters=out_channels,
+                                   filter_size=3,
+                                   stride=1,
+                                   padding=1,
+                                   param_attr=layer_init_kaiming_normal(),
+                                   bias_attr=None)]
 
-        return output
+    for k in range(4):
+        output = output + [preconv2d_depthseperated(input=out_channels,
+                                                    channel=out_channels,
+                                                    kernel_size=3,
+                                                    stride=1,
+                                                    pad=1,
+                                                    dilation=2 ** (k + 1))]
 
-class refinement2():
-    def __init__(self, channels):
-        self.channels = channels
+    return fluid.dygraph.Sequential(*output)
 
-    def inference(self, input):
-        output = preconv2d(input=input,
-                           channel=self.channels,
-                           kernel_size=3,
-                           stride=1,
-                           pad=1,
-                           dilation=8)
+def refinement2(in_channels, out_channels):
 
+    output = [preconv2d(input=in_channels,
+                        channel=out_channels,
+                        kernel_size=3,
+                        stride=1,
+                        pad=1,
+                        dilation=8)]
 
-        for k in reversed(range(3)):
-            output = preconv2d_depthseperated(input=output,
-                                              channel=self.channels,
-                                              kernel_size=3,
-                                              stride=1,
-                                              pad=1,
-                                              dilation=2**k)
+    for k in reversed(range(3)):
+        output = output + [preconv2d_depthseperated(input=out_channels,
+                                                    channel=out_channels,
+                                                    kernel_size=3,
+                                                    stride=1,
+                                                    pad=1,
+                                                    dilation=2 ** k)]
 
-        output = fluid.layers.conv2d(input=output,
-                                     num_filters=1,
-                                     filter_size=3,
-                                     stride=1,
-                                     padding=1,
-                                     param_attr=None,
-                                     bias_attr=None)
-        return output
+    output = output + [fluid.dygraph.Conv2D(num_channels=out_channels,
+                                            num_filters=1,
+                                            filter_size=3,
+                                            stride=1,
+                                            padding=1,
+                                            param_attr=layer_init_kaiming_normal(),
+                                            bias_attr=None)]
 
-class hourglass():
+    return fluid.dygraph.Sequential(*output)
+
+class hourglass(fluid.dygraph.Layer):
     def __init__(self, init_channel=8):
+        super(hourglass, self).__init__()
         self.init_channel = init_channel
 
-    def conv1(self, input):
-        return convbn(input=input,
-                      channel=self.init_channel * 2,
-                      kernel_size=3,
-                      stride=2,
-                      padding=1,
-                      conv_param_attr=layer_init_kaiming_normal(),
-                      conv_bias_attr=False,
-                      bn_param_attr=layer_init_constant(1.0),
-                      bn_bias_attr=layer_init_constant(0.0),
-                      bn_activation='relu')
+        self.conv1 = fluid.dygraph.Sequential(convbn(input=self.init_channel,
+                                                     channel=self.init_channel * 2,
+                                                     kernel_size=3,
+                                                     stride=2,
+                                                     padding=1,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation='relu'))
 
-    def conv2(self, input):
-        return convbn(input=input,
-                      channel=self.init_channel * 2,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      conv_param_attr=layer_init_kaiming_normal(),
-                      conv_bias_attr=False,
-                      bn_param_attr=layer_init_constant(1.0),
-                      bn_bias_attr=layer_init_constant(0.0),
-                      bn_activation='relu')
+        self.conv2 = fluid.dygraph.Sequential(convbn(input=self.init_channel * 2,
+                                                     channel=self.init_channel * 2,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation='relu'))
 
-    def conv3(self, input):
-        return convbn(input=input,
-                      channel=self.init_channel * 2,
-                      kernel_size=3,
-                      stride=2,
-                      padding=1,
-                      conv_param_attr=layer_init_kaiming_normal(),
-                      conv_bias_attr=False,
-                      bn_param_attr=layer_init_constant(1.0),
-                      bn_bias_attr=layer_init_constant(0.0),
-                      bn_activation='relu')
+        self.conv3 = fluid.dygraph.Sequential(convbn(input=self.init_channel * 2,
+                                                     channel=self.init_channel * 2,
+                                                     kernel_size=3,
+                                                     stride=2,
+                                                     padding=1,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation='relu'))
 
-    def conv4(self, input):
-        return convbn(input=input,
-                      channel=self.init_channel * 2,
-                      kernel_size=3,
-                      stride=1,
-                      padding=1,
-                      conv_param_attr=layer_init_kaiming_normal(),
-                      conv_bias_attr=False,
-                      bn_param_attr=layer_init_constant(1.0),
-                      bn_bias_attr=layer_init_constant(0.0),
-                      bn_activation='relu')
+        self.conv4 = fluid.dygraph.Sequential(convbn(input=self.init_channel * 2,
+                                                     channel=self.init_channel * 2,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation='relu'))
 
-    def conv5(self, input):
-        return deconvbn(input=input,
-                        channel=self.init_channel*2,
-                        kernel_size=3,
-                        padding=[1,0,1,0],
-                        stride=2,
-                        conv_param_attr=layer_init_kaiming_normal(),
-                        conv_bias_attr=False,
-                        bn_param_attr=layer_init_constant(1.0),
-                        bn_bias_attr=layer_init_constant(0.0),
-                        bn_activation=None)
+        self.conv5 = fluid.dygraph.Sequential(deconvbn(input=self.init_channel * 2,
+                                                       channel=self.init_channel * 2,
+                                                       kernel_size=3,
+                                                       padding=(1, 1),
+                                                       stride=2,
+                                                       conv_param_attr=layer_init_kaiming_normal(),
+                                                       conv_bias_attr=False,
+                                                       bn_param_attr=layer_init_constant(1.0),
+                                                       bn_bias_attr=layer_init_constant(0.0),
+                                                       bn_activation=None))
 
-    def conv6(self, input):
-        return deconvbn(input=input,
-                        channel=self.init_channel,
-                        kernel_size=3,
-                        padding=[1,0,1,0],
-                        stride=2,
-                        conv_param_attr=layer_init_kaiming_normal(),
-                        conv_bias_attr=False,
-                        bn_param_attr=layer_init_constant(1.0),
-                        bn_bias_attr=layer_init_constant(0.0),
-                        bn_activation=None)
+        self.conv6 = fluid.dygraph.Sequential(deconvbn(input=self.init_channel * 2,
+                                                       channel=self.init_channel,
+                                                       kernel_size=3,
+                                                       padding=(1, 1),
+                                                       stride=2,
+                                                       conv_param_attr=layer_init_kaiming_normal(),
+                                                       conv_bias_attr=False,
+                                                       bn_param_attr=layer_init_constant(1.0),
+                                                       bn_bias_attr=layer_init_constant(0.0),
+                                                       bn_activation=None))
 
-    def inference(self, input):
+    def forward(self, input):
         res = []
-        output_0 = self.conv1(input)
+        output = self.conv1(input)
 
-        pre = self.conv2(output_0)
+        pre = self.conv2(output)
 
-        output_1 = self.conv3(pre)
+        output = self.conv3(pre)
 
-        output_2 = self.conv4(output_1)
+        output = self.conv4(output)
 
-        res.append(output_2)
+        res.append(output)
 
-        post = fluid.layers.relu((self.conv5(output_2) + pre))
+        post = fluid.layers.relu((fluid.layers.pad2d(self.conv5(output), paddings=[1,0,1,0]) + pre))
+
         res.append(post)
 
         output = self.conv6(post)
-        res.append(output)
+        res.append(fluid.layers.pad2d(output, paddings=[1,0,1,0]))
 
         return res
 
-class feature_extraction():
+class feature_extraction(fluid.dygraph.Layer):
 
     def __init__(self):
-        self.hourglass = hourglass(init_channel=8)
+        super(feature_extraction, self).__init__()
 
-    def dres0(self, input):
-        output_0 = convbn(input=input,
-                          channel=4,
-                          kernel_size=3,
-                          stride=2,
-                          padding=1,
-                          dilation=2,
-                          conv_param_attr=layer_init_kaiming_normal(),
-                          conv_bias_attr=False,
-                          bn_param_attr=layer_init_constant(1.0),
-                          bn_bias_attr=layer_init_constant(0.0))
-        output_0 = fluid.layers.relu(output_0)
-        output_1 = convbn(input=output_0,
-                          channel=8,
-                          kernel_size=3,
-                          stride=1,
-                          padding=1,
-                          dilation=4,
-                          conv_param_attr=layer_init_kaiming_normal(),
-                          conv_bias_attr=False,
-                          bn_param_attr=layer_init_constant(1.0),
-                          bn_bias_attr=layer_init_constant(0.0))
-        output_1 = fluid.layers.relu(output_1)
-        return output_1
+        self.dres0 = fluid.dygraph.Sequential(convbn(input=3,
+                                                     channel=4,
+                                                     kernel_size=3,
+                                                     stride=2,
+                                                     padding=1,
+                                                     dilation=2,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation="relu"),
+                                              convbn(input=4,
+                                                     channel=8,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     dilation=4,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation="relu"))
 
-    def dres1(self, input):
-        output_0 = convbn(input=input,
-                          channel=4,
-                          kernel_size=3,
-                          stride=1,
-                          padding=1,
-                          dilation=2,
-                          conv_param_attr=layer_init_kaiming_normal(),
-                          conv_bias_attr=False,
-                          bn_param_attr=layer_init_constant(1.0),
-                          bn_bias_attr=layer_init_constant(0.0))
-        output_0 = fluid.layers.relu(output_0)
-        output_1 = convbn(input=output_0,
-                          channel=8,
-                          kernel_size=3,
-                          stride=1,
-                          padding=1,
-                          dilation=2,
-                          conv_param_attr=layer_init_kaiming_normal(),
-                          conv_bias_attr=False,
-                          bn_param_attr=layer_init_constant(1.0),
-                          bn_bias_attr=layer_init_constant(0.0))
-        return output_1
+        self.dres1 = fluid.dygraph.Sequential(convbn(input=8,
+                                                     channel=4,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     dilation=2,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation="relu"),
+                                              convbn(input=4,
+                                                     channel=8,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     dilation=2,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation=None))
 
-    def dres2(self, input):
-        return self.hourglass.inference(input)
+        self.dres2 = hourglass(init_channel=8)
 
-    def dres3(self, input):
-        output = convbn(input=input,
-                        channel=8,
-                        kernel_size=3,
-                        stride=1,
-                        padding=1,
-                        dilation=1,
-                        conv_param_attr=layer_init_kaiming_normal(),
-                        conv_bias_attr=False,
-                        bn_param_attr=layer_init_constant(1.0),
-                        bn_bias_attr=layer_init_constant(0.0),
-                        bn_activation='relu')
+        self.dres3 = fluid.dygraph.Sequential(convbn(input=8,
+                                                     channel=8,
+                                                     kernel_size=3,
+                                                     stride=1,
+                                                     padding=1,
+                                                     dilation=1,
+                                                     conv_param_attr=layer_init_kaiming_normal(),
+                                                     conv_bias_attr=False,
+                                                     bn_param_attr=layer_init_constant(1.0),
+                                                     bn_bias_attr=layer_init_constant(0.0),
+                                                     bn_activation="relu"),
+                                              fluid.dygraph.Conv2D(num_channels=8,
+                                                                   num_filters=8,
+                                                                   filter_size=3,
+                                                                   padding=1,
+                                                                   stride=1,
+                                                                   param_attr=layer_init_kaiming_normal(),
+                                                                   bias_attr=False))
 
-        return fluid.layers.conv2d(input=output,
-                                   num_filters=8,
-                                   filter_size=3,
-                                   padding=1,
-                                   stride=1,
-                                   param_attr=layer_init_kaiming_normal(),
-                                   bias_attr=False)
 
-    def inference(self, input):
+    def forward(self, input):
 
-        output_0 = self.dres0(input)
+        output = self.dres0(input)
 
-        output_1 = self.dres1(output_0) + output_0
+        output = self.dres1(output) + output
 
-        res = self.dres2(output_1)
-        output_2 = res[-1] + output_1
+        res = self.dres2(output)
 
-        output_3 = self.dres3(output_2)
+        output = res[-1] + output
+
+        output = self.dres3(output)
 
         res.pop(-1)
-        res.append(output_3)
+        res.append(output)
 
         return res
 
