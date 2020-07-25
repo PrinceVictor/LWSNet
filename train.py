@@ -19,8 +19,8 @@ parser.add_argument('--layers_3d', type=int, default=4, help='number of initial 
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=10)
-parser.add_argument('--train_batch_size', type=int, default=4)
-parser.add_argument('--test_batch_size', type=int, default=8)
+parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--test_batch_size', type=int, default=16)
 parser.add_argument('--gpu_id', type=int, default=2)
 parser.add_argument('--resume', action='store_true', default=False,)
 
@@ -62,7 +62,10 @@ def main():
         model_state, _ = fluid.dygraph.load_dygraph("results/sceneflow")
         model.set_dict(model_state)
 
-    adam = fluid.optimizer.AdamOptimizer(learning_rate=args.lr, parameter_list=model.parameters())
+    boundaries = [150, 300]
+    values = [args.lr, args.lr * 0.1, args.lr * 0.01]
+    adam = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
+                                parameter_list=model.parameters())
 
     error_3pixel_check = np.inf
 
@@ -78,8 +81,9 @@ def main():
             left_img, right_img, gt = data
 
             gt_mask = np.zeros(gt.shape, np.float32)
-            gt_mask[gt.numpy() > 0] = 1.0
+            gt_mask[gt.numpy() < 192] = 1.0
             gt_mask = fluid.layers.assign(gt_mask)
+            gt = fluid.layers.elementwise_mul(gt, gt_mask)
 
             output = model(left_img, right_img)
 

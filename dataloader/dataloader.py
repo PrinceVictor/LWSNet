@@ -60,6 +60,7 @@ class sceneflow_dataloader():
                 if training:
                     w, h = left_img.size
                     th, tw = 256, 512
+                    # th, tw = 540, 960
 
                     x1 = np.random.randint(0, w - tw)
                     y1 = np.random.randint(0, h - th)
@@ -70,8 +71,8 @@ class sceneflow_dataloader():
 
                 else:
                     w, h = left_img.size
-                    left_img = left_img.crop((w - 960, h - 544, w, h))
-                    right_img = right_img.crop((w - 960, h - 544, w, h))
+                    left_img = left_img.crop((w - 512, h - 256, w, h))
+                    right_img = right_img.crop((w - 512, h - 256, w, h))
 
 
                 left_img = np.ascontiguousarray(left_img, dtype=np.float32) / 256 * 2 - 1.0

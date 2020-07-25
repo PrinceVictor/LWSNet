@@ -119,8 +119,6 @@ class Ownnet(fluid.dygraph.Layer):
 
         img_size = left_input.shape
 
-        # feats_l = self.feature_extractor(left_input)
-        # feats_r = self.feature_extractor(right_input)
         feats_l = self.feature_extraction(left_input)
         feats_r = self.feature_extraction(right_input)
 
@@ -181,7 +179,7 @@ class Ownnet(fluid.dygraph.Layer):
 def disparity_regression(input, start, end, stride=1):
     disp = fluid.layers.range(start*stride, end*stride, stride, dtype='float32')
 
-    disp.stop_gradient = True
+    # disp.stop_gradient = True
     disp = fluid.layers.reshape(disp, shape=[1, -1, 1, 1])
 
     disp = fluid.layers.expand(disp,
