@@ -73,6 +73,7 @@ class sceneflow_dataloader():
                     w, h = left_img.size
                     left_img = left_img.crop((w - 512, h - 256, w, h))
                     right_img = right_img.crop((w - 512, h - 256, w, h))
+                    gt = gt[h - 256:, w - 512:]
 
 
                 left_img = np.ascontiguousarray(left_img, dtype=np.float32) / 256 * 2 - 1.0

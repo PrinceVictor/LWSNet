@@ -21,7 +21,8 @@ parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=10)
 parser.add_argument('--train_batch_size', type=int, default=8)
 parser.add_argument('--test_batch_size', type=int, default=16)
-parser.add_argument('--gpu_id', type=int, default=2)
+parser.add_argument('--gpu_id', type=int, default=3)
+parser.add_argument('--model', type=str, default="test")
 parser.add_argument('--resume', action='store_true', default=False,)
 
 args = parser.parse_args()
@@ -59,11 +60,17 @@ def main():
     model = Ownnet(args)
 
     if args.resume:
-        model_state, _ = fluid.dygraph.load_dygraph("results/sceneflow")
+        model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
         model.set_dict(model_state)
 
-    boundaries = [150, 300]
-    values = [args.lr, args.lr * 0.1, args.lr * 0.01]
+    batch_len = 0
+    for batch_id, data in enumerate(train_data_loader()):
+        batch_len += 1
+
+    print("batch_len", batch_len)
+
+    boundaries = [50*batch_len, 150*batch_len, 300*batch_len]
+    values = [args.lr, args.lr * 0.1, args.lr * 0.01, args.lr * 0.001]
     adam = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
                                 parameter_list=model.parameters())
 
@@ -82,17 +89,20 @@ def main():
 
             gt_mask = np.zeros(gt.shape, np.float32)
             gt_mask[gt.numpy() < 192] = 1.0
+            useful_pixels = len(np.flatnonzero(gt_mask))
             gt_mask = fluid.layers.assign(gt_mask)
             gt = fluid.layers.elementwise_mul(gt, gt_mask)
 
             output = model(left_img, right_img)
 
+            L1_loss = fluid.dygraph.L1Loss("mean")
             tem_stage_loss = []
             for index in range(stages):
+
                 mask_output = fluid.layers.elementwise_mul(output[index], gt_mask)
-                temp_loss = fluid.layers.reduce_mean(
-                    fluid.layers.smooth_l1(mask_output, gt) / (gt.shape[-1] * gt.shape[-2]))
-                temp_loss = temp_loss * args.loss_weights[index]
+                # temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt))
+                temp_loss = L1_loss(mask_output, gt)
+                temp_loss = temp_loss * args.loss_weights[index] * (gt.shape[-1] * gt.shape[-2]) / useful_pixels
                 tem_stage_loss.append(temp_loss)
                 stage_loss_list[index] += temp_loss.numpy()
 
@@ -108,10 +118,12 @@ def main():
                         range(stages)]
             info_str = '\t'.join(info_str)
 
-            print("Train: epoch {}, batch_id {} sum_loss {} \t {}".format(epoch,
-                                                                          batch_id,
-                                                                          np.round(sum_losses_rec / (batch_id + 1), 3),
-                                                                          info_str))
+            print("Train: epoch {}, batch_id {} learn_lr {:.5f} sum_loss {} \t {}".format(epoch,
+                                                                                          batch_id,
+                                                                                          adam.current_step_lr(),
+                                                                                          np.round(sum_losses_rec / (
+                                                                                                      batch_id + 1), 3),
+                                                                                          info_str))
 
         model.eval()
 
@@ -136,7 +148,7 @@ def main():
         if error_3pixel / (batch_id + 1) < error_3pixel_check:
             error_3pixel_check = error_3pixel / (batch_id + 1)
 
-            fluid.save_dygraph(model.state_dict(), "results/sceneflow")
+            fluid.save_dygraph(model.state_dict(), "results/"+args.model)
             print("save model param success")
 
 

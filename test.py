@@ -17,6 +17,7 @@ parser.add_argument('--channels_3d', type=int, default=8, help='number of initia
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--gpu_id', type=int, default=0)
+parser.add_argument('--model', type=str, default="test")
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -43,7 +44,7 @@ if __name__ == "__main__":
 
     model = Ownnet(args=args)
 
-    model_state, _ = fluid.dygraph.load_dygraph("results/kitti")
+    model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
     model.set_dict(model_state)
 
     model.eval()
@@ -57,7 +58,7 @@ if __name__ == "__main__":
         disp = (output[stage][0][0].numpy()).astype(np.uint8)
         disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
 
-        cv2.imshow("disp", disp)
-        cv2.imshow("left_img", left_img)
-        cv2.waitKey(0)
+        # cv2.imshow("disp", disp)
+        # cv2.imshow("left_img", left_img)
+        # cv2.waitKey(0)
 

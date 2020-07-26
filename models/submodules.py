@@ -54,12 +54,12 @@ def deconvbn(input, channel,
 def batch_relu_conv3d(input, channel,
                       kernel_size=3, stride=1, padding=1, bn3d=True,
                       bn_activation='relu',
-                      conv_param_attr=None, conv_bias_attr=False,
+                      conv_param_attr=None, conv_bias_attr=None,
                       bn_param_attr=None, bn_bias_attr=None):
 
     if bn3d:
         return fluid.dygraph.Sequential(fluid.dygraph.BatchNorm(num_channels=input,
-                                                                act=bn_activation,
+                                                                act='relu',
                                                                 param_attr=bn_param_attr,
                                                                 bias_attr=bn_bias_attr,
                                                                 in_place=False),
@@ -140,13 +140,62 @@ def preconv2d_depthseperated(input, channel,
                                                              param_attr=layer_init_kaiming_normal(),
                                                              bias_attr=False))
 
+class Post_3DConvs(fluid.dygraph.Layer):
+    def __init__(self, layers, channels):
+        super(Post_3DConvs, self).__init__()
+        self.layers = layers
+        self.channels = channels
 
-def Post_3DConvs(layers, channels):
-        output = [batch_relu_conv3d(input=1, channel=channels)]
-        for i in range(layers):
-            output = output + [batch_relu_conv3d(input=channels, channel=channels)]
-        output = output + [batch_relu_conv3d(input=channels, channel=1)]
-        return fluid.dygraph.Sequential(*output)
+        self.layer1 = batch_relu_conv3d(input=1,
+                                        channel=channels,
+                                        conv_param_attr=layer_init_kaiming_normal(),
+                                        conv_bias_attr=False,
+                                        bn_param_attr=layer_init_constant(1.0),
+                                        bn_bias_attr=layer_init_constant(0.0))
+        self.layer_list = []
+        for i in range(self.layers):
+            temp_layer = batch_relu_conv3d(input=channels,
+                                           channel=channels,
+                                           conv_param_attr=layer_init_kaiming_normal(),
+                                           conv_bias_attr=False,
+                                           bn_param_attr=layer_init_constant(1.0),
+                                           bn_bias_attr=layer_init_constant(0.0))
+            self.layer_list.append(temp_layer)
+
+        self.layer2 = batch_relu_conv3d(input=channels,
+                                        channel=1,
+                                        conv_param_attr=layer_init_kaiming_normal(),
+                                        conv_bias_attr=False,
+                                        bn_param_attr=layer_init_constant(1.0),
+                                        bn_bias_attr=layer_init_constant(0.0))
+
+    def forward(self, input):
+        output = self.layer1(input)
+
+        for i in range(self.layers):
+            output = self.layer_list[i](output)
+
+        output = self.layer2(output)
+
+        return output
+
+
+# def Post_3DConvs(layers, channels):
+#         output = [batch_relu_conv3d(input=1,
+#                                     channel=channels,
+#                                     conv_param_attr=layer_init_kaiming_normal(),
+#                                     conv_bias_attr=False,
+#                                     bn_param_attr=layer_init_constant(1.0),
+#                                     bn_bias_attr=layer_init_constant(0.0))]
+#         for i in range(layers):
+#             output = output + [batch_relu_conv3d(input=channels,
+#                                                  channel=channels,
+#                                                  conv_param_attr=layer_init_kaiming_normal(),
+#                                                  conv_bias_attr=False,
+#                                                  bn_param_attr=layer_init_constant(1.0),
+#                                                  bn_bias_attr=layer_init_constant(0.0))]
+#         output = output + [batch_relu_conv3d(input=channels, channel=1, conv_param_attr=layer_init_kaiming_normal())]
+#         return fluid.dygraph.Sequential(*output)
 
 def refinement1(in_channels, out_channels):
 
@@ -156,7 +205,7 @@ def refinement1(in_channels, out_channels):
                                    stride=1,
                                    padding=1,
                                    param_attr=layer_init_kaiming_normal(),
-                                   bias_attr=None)]
+                                   bias_attr=layer_init_kaiming_normal())]
 
     for k in range(4):
         output = output + [preconv2d_depthseperated(input=out_channels,
@@ -191,7 +240,7 @@ def refinement2(in_channels, out_channels):
                                             stride=1,
                                             padding=1,
                                             param_attr=layer_init_kaiming_normal(),
-                                            bias_attr=None)]
+                                            bias_attr=layer_init_kaiming_normal())]
 
     return fluid.dygraph.Sequential(*output)
 
@@ -275,11 +324,9 @@ class hourglass(fluid.dygraph.Layer):
         output = self.conv3(pre)
 
         output = self.conv4(output)
-
         res.append(output)
 
         post = fluid.layers.relu((fluid.layers.pad2d(self.conv5(output), paddings=[1,0,1,0]) + pre))
-
         res.append(post)
 
         output = self.conv6(post)

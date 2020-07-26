@@ -50,6 +50,8 @@ class Ownnet(fluid.dygraph.Layer):
         # vgrid = fluid.layers.concat([xx, yy], 1)
 
         xx_disp_sub = fluid.layers.elementwise_sub(xx, disp)
+        xx_disp_sub = xx_disp_sub/max(W-1, 1)*2.0 - 1.0
+        yy = yy/max(H-1, 1)*2.0 - 1.0
 
         vgrid = fluid.layers.concat([xx_disp_sub, yy], 1)
 
@@ -74,7 +76,6 @@ class Ownnet(fluid.dygraph.Layer):
         for i in range(0, maxdisp, stride):
 
             if i > 0:
-
                 cost_left = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, :i]), dim=1, keep_dim=True)
                 cost_right = fluid.layers.reduce_sum(fluid.layers.abs(feat_l[:, :, :, i:] - feat_r[:, :, :, :-i]),
                                                      dim=1, keep_dim=True)
@@ -99,17 +100,17 @@ class Ownnet(fluid.dygraph.Layer):
 
         batch_disp = unsqueeze_repeat_view(disp, maxdisp, [-1, 1, shape[-2], shape[-1]])
 
-        batch_shfit = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, step=1, dtype='int32'), [shape[0]])
-        batch_shfit = fluid.layers.reshape(batch_shfit, [-1,1,1,1]) * stride
+        batch_shfit_temp = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, step=1, dtype='float32'), [shape[0]])
+        batch_shfit = fluid.layers.reshape(batch_shfit_temp, shape=[-1,1,1,1])
 
-        batch_disp = batch_disp - fluid.layers.cast(batch_shfit, 'float32')
+        batch_disp = batch_disp - batch_shfit * stride
 
         batch_feat_l = unsqueeze_repeat_view(feat_l, maxdisp, [-1, shape[-3], shape[-2], shape[-1]])
         batch_feat_r = unsqueeze_repeat_view(feat_r, maxdisp, [-1, shape[-3], shape[-2], shape[-1]])
 
         cost = fluid.layers.reduce_sum(
             fluid.layers.abs(batch_feat_l - self.warp(batch_feat_r, batch_disp)),
-            dim=1)
+            dim=1, keep_dim=True)
 
         cost = fluid.layers.reshape(cost, shape=[shape[0], -1, shape[2], shape[3]])
 
@@ -127,6 +128,7 @@ class Ownnet(fluid.dygraph.Layer):
         pred = []
 
         for scale in range(len(feats_l)):
+
             if scale > 0:
                 wflow = fluid.layers.resize_bilinear(pred[scale - 1],
                                                      out_shape=[feats_l[scale].shape[2], feats_l[scale].shape[3]]) * feats_l[scale].shape[2] / img_size[2]
@@ -148,18 +150,16 @@ class Ownnet(fluid.dygraph.Layer):
             cost = fluid.layers.squeeze(cost, [1])
 
             if scale == 0:
-                pre_low_res = disparity_regression(input=fluid.layers.softmax(-cost, axis=1),
-                                                   start=0,
-                                                   end=self.maxdisplist[0])
+                pre_low_res = disparity_regression(start=0,
+                                                   end=self.maxdisplist[0])(input=fluid.layers.softmax(-cost, axis=1))
                 pre_low_res = pre_low_res * img_size[2]/pre_low_res.shape[2]
 
                 disp_up = fluid.layers.resize_bilinear(pre_low_res,
                                                        out_shape=[img_size[2], img_size[3]])
                 pred.append(disp_up)
             else:
-                pre_low_res = disparity_regression(input=fluid.layers.softmax(-cost, axis=1),
-                                                   start=-self.maxdisplist[scale]+1,
-                                                   end=self.maxdisplist[scale])
+                pre_low_res = disparity_regression(start=-self.maxdisplist[scale]+1,
+                                                   end=self.maxdisplist[scale])(input=fluid.layers.softmax(-cost, axis=1))
                 pre_low_res = pre_low_res * img_size[2] / pre_low_res.shape[2]
 
                 disp_up = fluid.layers.resize_bilinear(pre_low_res,
@@ -176,16 +176,16 @@ class Ownnet(fluid.dygraph.Layer):
         return pred
 
 
-def disparity_regression(input, start, end, stride=1):
-    disp = fluid.layers.range(start*stride, end*stride, stride, dtype='float32')
+class disparity_regression(fluid.dygraph.Layer):
+    def __init__(self, start, end, stride=1):
+        super(disparity_regression, self).__init__()
+        self.disp = fluid.layers.range(start*stride, end*stride, stride, dtype='float32')
+        self.disp = fluid.layers.reshape(self.disp, shape=[1, -1, 1, 1])
 
-    # disp.stop_gradient = True
-    disp = fluid.layers.reshape(disp, shape=[1, -1, 1, 1])
+    def forward(self, input):
 
-    disp = fluid.layers.expand(disp,
-                               expand_times=[input.shape[0], 1, input.shape[2], input.shape[3]])
-    # disp = fluid.layers.expand(disp,
-    #                            expand_times=[1, 1, input.shape[2], input.shape[3]])
-
-    output = fluid.layers.reduce_sum(input*disp, dim=1, keep_dim=True)
-    return output
+        disp = fluid.layers.expand(self.disp, expand_times=[input.shape[0], 1, input.shape[2], input.shape[3]])
+        # disp = fluid.layers.expand(disp,
+        #                            expand_times=[1, 1, input.shape[2], input.shape[3]])
+        output = fluid.layers.reduce_sum(input*disp, dim=1, keep_dim=True)
+        return output
