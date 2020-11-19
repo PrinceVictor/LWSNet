@@ -100,8 +100,8 @@ class Ownnet(fluid.dygraph.Layer):
 
         batch_disp = unsqueeze_repeat_view(disp, maxdisp, [-1, 1, shape[-2], shape[-1]])
 
-        batch_shfit_temp = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, step=1, dtype='float32'), [shape[0]])
-        batch_shfit = fluid.layers.reshape(batch_shfit_temp, shape=[-1,1,1,1])
+        batch_shift_temp = fluid.layers.expand(fluid.layers.range(-maxdisp+1, maxdisp, step=1, dtype='float32'), [shape[0]])
+        batch_shfit = fluid.layers.reshape(batch_shift_temp, shape=[-1,1,1,1])
 
         batch_disp = batch_disp - batch_shfit * stride
 
@@ -152,8 +152,9 @@ class Ownnet(fluid.dygraph.Layer):
             if scale == 0:
                 pre_low_res = disparity_regression(start=0,
                                                    end=self.maxdisplist[0])(input=fluid.layers.softmax(-cost, axis=1))
+                # print("pre", np.round(pre_low_res.numpy(), 3))
                 pre_low_res = pre_low_res * img_size[2]/pre_low_res.shape[2]
-
+                # print("after", np.round(pre_low_res.numpy(), 3))
                 disp_up = fluid.layers.resize_bilinear(pre_low_res,
                                                        out_shape=[img_size[2], img_size[3]])
                 pred.append(disp_up)
@@ -161,7 +162,6 @@ class Ownnet(fluid.dygraph.Layer):
                 pre_low_res = disparity_regression(start=-self.maxdisplist[scale]+1,
                                                    end=self.maxdisplist[scale])(input=fluid.layers.softmax(-cost, axis=1))
                 pre_low_res = pre_low_res * img_size[2] / pre_low_res.shape[2]
-
                 disp_up = fluid.layers.resize_bilinear(pre_low_res,
                                                        out_shape=[img_size[2], img_size[3]])
                 pred.append(disp_up+pred[scale-1])

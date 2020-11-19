@@ -54,11 +54,11 @@ if __name__ == "__main__":
 
     output = model(left_image, right_image)
 
-    for stage in range(stages):
-        disp = (output[stage][0][0].numpy()).astype(np.uint8)
-        disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
+    # for stage in range(stages):
+    disp = (output[3][0][0].numpy()).astype(np.uint8)
+    disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1, beta=0), cv2.COLORMAP_JET)
 
-        # cv2.imshow("disp", disp)
-        # cv2.imshow("left_img", left_img)
-        # cv2.waitKey(0)
+    cv2.imshow("disp", disp)
+    cv2.imshow("left_img", left_img)
+    cv2.waitKey(0)
 
