@@ -1,6 +1,5 @@
 import os
 import os.path
-
 import numpy as np
 
 def dataloader(filepath, split_file=None):

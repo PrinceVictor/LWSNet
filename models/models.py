@@ -1,10 +1,10 @@
 import paddle
-import paddle.fluid as fluid
+import paddle.nn
 
 from models.submodules import *
 from utils.utils import *
 
-class Ownnet(fluid.dygraph.Layer):
+class Ownnet(nn.Layer):
     def __init__(self, args):
         super(Ownnet, self).__init__()
 
@@ -17,8 +17,9 @@ class Ownnet(fluid.dygraph.Layer):
         self.volume_postprocess = []
 
         for i in range(3):
-            net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
+            net3d = post_3dconvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
+        self.volume_postprocess = nn.LayerList(self.volume_postprocess)
 
         self.refinement1_left = refinement1(in_channels=3, out_channels=32)
         self.refinement1_disp = refinement1(in_channels=1, out_channels=32)
@@ -32,6 +33,8 @@ class Ownnet(fluid.dygraph.Layer):
         :return:
         """
         B, C, H, W = x.shape
+
+        xx = paddle.arange(0, W,)
 
         xx = fluid.layers.expand(
             fluid.layers.reshape(fluid.layers.range(0, W, 1, dtype='float32'), shape=[1, -1]),
