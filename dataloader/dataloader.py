@@ -1,6 +1,6 @@
 import paddle
 from paddle.io import Dataset
-from paddle.vision.transforms import Compose, Normalize
+from paddle.vision.transforms import Compose, Normalize, Transpose
 import os
 from PIL import Image
 from . import readpfm as rp
@@ -24,7 +24,7 @@ def sceneflow_dispLoader(path):
 def Kitti_dispLoader(path):
     return Image.open(path)
 
-class MyDataloader():
+class MyDataloader(Dataset):
     def __init__(self, left, right, left_disparity, training=True, loader=default_loader, kitti_set=True):
         super(MyDataloader, self).__init__()
 
@@ -39,8 +39,8 @@ class MyDataloader():
         else:
             self.dploader = sceneflow_dispLoader
 
-        self.tramsform = Compose([Normalize(mean=imagenet_stats["mean"],
-                                            std=imagenet_stats["std"])])
+        self.tramsform = Compose([Transpose(),
+                                  Normalize(mean=imagenet_stats["mean"], std=imagenet_stats["std"])])
 
 
     def __getitem__(self, index):

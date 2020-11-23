@@ -22,9 +22,10 @@ def convbn(in_channels, out_channels,
                                    dilation=dilation,
                                    weight_attr=conv_param_attr,
                                    bias_attr=conv_bias_attr),
-                         nn.BatchNorm2D(num_features=out_channels,
-                                        weight_attr=bn_param_attr,
-                                        bias_attr=bn_bias_attr))
+                         paddle.fluid.BatchNorm(num_channels=out_channels,
+                                        # weight_attr=bn_param_attr,
+                                        # bias_attr=bn_bias_attr
+                                        ))
 
 def deconvbn(in_channels, out_channels,
              kernel_size, stride, padding, output_padding=1, dilation=1,
@@ -39,8 +40,9 @@ def deconvbn(in_channels, out_channels,
                                             weight_attr=conv_param_attr,
                                             bias_attr=conv_bias_attr),
                          nn.BatchNorm2D(num_features=out_channels,
-                                        weight_attr=bn_param_attr,
-                                        bias_attr=bn_bias_attr))
+                                        # weight_attr=bn_param_attr,
+                                        # bias_attr=bn_bias_attr
+                                        ))
 
 class hourglass(nn.Layer):
     def __init__(self, init_channel=8):
@@ -238,8 +240,9 @@ def batch_relu_conv3d(in_channels, out_channels,
 
     if bn3d:
         return nn.Sequential(nn.BatchNorm3D(num_features=in_channels,
-                                            weight_attr=bn_param_attr,
-                                            bias_attr=bn_bias_attr),
+                                            # weight_attr=bn_param_attr,
+                                            # bias_attr=bn_bias_attr
+                                            ),
                              nn.ReLU(),
                              nn.Conv3D(in_channels=in_channels,
                                        out_channels=out_channels,
