@@ -22,7 +22,7 @@ def convbn(in_channels, out_channels,
                                    dilation=dilation,
                                    weight_attr=conv_param_attr,
                                    bias_attr=conv_bias_attr),
-                         paddle.fluid.BatchNorm(num_channels=out_channels,
+                         nn.BatchNorm2D(num_features=out_channels,
                                         # weight_attr=bn_param_attr,
                                         # bias_attr=bn_bias_attr
                                         ))

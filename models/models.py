@@ -86,6 +86,7 @@ class Ownnet(nn.Layer):
         assert maxdisp % stride == 0
 
         cost = paddle.zeros((feat_l.shape[0], maxdisp//stride, feat_l.shape[2], feat_l.shape[3]), dtype='float32')
+        # cost.stop_gradient = False
 
         # cost_list = []
         for i in range(0, maxdisp, stride):
@@ -212,7 +213,7 @@ class disparity_regression(nn.Layer):
     def __init__(self, start, end, stride=1):
         super(disparity_regression, self).__init__()
         self.disp = paddle.arange(start*stride, end*stride, stride, dtype='float32')
-        self.disp.stop_gradient = True
+        # self.disp.stop_gradient = True
         self.disp = paddle.reshape(self.disp, shape=[1, -1, 1, 1])
         _, self.my_steplength, _, _ = self.disp.shape
 

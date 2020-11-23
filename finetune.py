@@ -36,6 +36,7 @@ args = parser.parse_args()
 def main():
 
     print("finetune KITTI main()")
+    paddle.disable_static()
 
     stages = 4
     gpu_id = args.gpu_id
@@ -58,9 +59,9 @@ def main():
     # for name, param in model.named_parameters():
     #     print(name, '\n', param)
 
-    if args.resume:
-        model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
-        model.set_dict(model_state)
+    # if args.resume:
+    #     model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
+    #     model.set_dict(model_state)
 
     batch_len = 0
     for batch_id, data in enumerate(train_loader()):
@@ -97,7 +98,7 @@ def main():
             print(outputs[3].shape)
 
             # loss = args.loss_weights[3] * F.smooth_l1_loss(paddle.masked_select(outputs[3], mask), gt_mask, reduction="mean")
-            loss = F.smooth_l1_loss(outputs[3], gt, reduction="mean")
+            loss = F.smooth_l1_loss(outputs[3], gt)
 
             # print(loss)
             #
@@ -151,43 +152,43 @@ def main():
             raise SystemExit
 
 
-        with paddle.no_grad():
-            model.eval()
-
-            for batch_id, data in enumerate(test_loader()):
-                left_img, right_img, gt = data
-
-                output = model(left_img, right_img)
-
-                for stage in range(stages):
-                    error_3pixel_list[stage] += error_estimating(output[stage].numpy(), gt.numpy())
-                    error_3pixel = sum(error_3pixel_list)
-
-                info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in range(stages)]
-                info_str = '\t'.join(info_str)
-
-                print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}" .format(epoch,
-                                                                                  batch_id,
-                                                                                  round(error_3pixel/(batch_id+1), 3),
-                                                                                  info_str))
-
-                # for batch_size_I in range(args.test_batch_size):
-                #     disp = (output[3][batch_size_I][0].numpy()).astype(np.uint8)
-                #     disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
-                #
-                #     gt_disp = (gt[batch_size_I][0].numpy()).astype(np.uint8)
-                #     gt_disp = cv2.applyColorMap(cv2.convertScaleAbs(gt_disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
-                #     cv2.imshow("disp", disp)
-                #     cv2.imshow("gt_disp", gt_disp)
-                #     cv2.waitKey(0)
-                #
-                # raise StopIteration
-
-            if error_3pixel / (batch_id + 1) < error_3pixel_check:
-                error_3pixel_check = error_3pixel / (batch_id + 1)
-
-                fluid.save_dygraph(model.state_dict(), "results/"+args.model)
-                print("save model param success")
+        # with paddle.no_grad():
+        #     model.eval()
+        #
+        #     for batch_id, data in enumerate(test_loader()):
+        #         left_img, right_img, gt = data
+        #
+        #         output = model(left_img, right_img)
+        #
+        #         for stage in range(stages):
+        #             error_3pixel_list[stage] += error_estimating(output[stage].numpy(), gt.numpy())
+        #             error_3pixel = sum(error_3pixel_list)
+        #
+        #         info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in range(stages)]
+        #         info_str = '\t'.join(info_str)
+        #
+        #         print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}" .format(epoch,
+        #                                                                           batch_id,
+        #                                                                           round(error_3pixel/(batch_id+1), 3),
+        #                                                                           info_str))
+        #
+        #         # for batch_size_I in range(args.test_batch_size):
+        #         #     disp = (output[3][batch_size_I][0].numpy()).astype(np.uint8)
+        #         #     disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
+        #         #
+        #         #     gt_disp = (gt[batch_size_I][0].numpy()).astype(np.uint8)
+        #         #     gt_disp = cv2.applyColorMap(cv2.convertScaleAbs(gt_disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
+        #         #     cv2.imshow("disp", disp)
+        #         #     cv2.imshow("gt_disp", gt_disp)
+        #         #     cv2.waitKey(0)
+        #         #
+        #         # raise StopIteration
+        #
+        #     if error_3pixel / (batch_id + 1) < error_3pixel_check:
+        #         error_3pixel_check = error_3pixel / (batch_id + 1)
+        #
+        #         fluid.save_dygraph(model.state_dict(), "results/"+args.model)
+        #         print("save model param success")
 
 
 def error_estimating(disp, ground_truth, maxdisp=192):
