@@ -1,5 +1,7 @@
 import argparse
 import paddle
+import paddle.nn.functional as F
+from paddle.io import DataLoader
 import paddle.fluid as fluid
 import cv2
 
@@ -13,10 +15,10 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
+parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
 # parser.add_argument('--datapath', default='/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/training/', help='datapath')
-# parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
-parser.add_argument('--loss_weights', type=float, nargs='+', default=[1., 1., 1., 1.])
+parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
+# parser.add_argument('--loss_weights', type=float, nargs='+', default=[1., 1., 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
 parser.add_argument('--channels_3d', type=int, default=8, help='number of initial channels 3d feature extractor ')
@@ -24,8 +26,8 @@ parser.add_argument('--layers_3d', type=int, default=4, help='number of initial 
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--epoch', type=int, default=150)
-parser.add_argument('--train_batch_size', type=int, default=4)
-parser.add_argument('--test_batch_size', type=int, default=4)
+parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--model', type=str, default="test")
 parser.add_argument('--resume', action='store_true', default=False,)
@@ -45,20 +47,12 @@ def main():
     train_left_img, train_right_img, train_left_disp, \
     test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath)
 
-    train_loader = dataloader.ImageLoad(train_left_img, train_right_img, train_left_disp, training=True)
-    test_loader = dataloader.ImageLoad(test_left_img, test_right_img, test_left_disp, training=False)
-
-    train_reader = train_loader.create_reader()
-    train_batch_reader = paddle.batch(reader=train_reader, batch_size=args.train_batch_size)
-
-    test_reader = test_loader.create_reader()
-    test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size)
-
-    train_data_loader = fluid.io.DataLoader.from_generator(iterable=True, capacity=8, use_multiprocess=False)
-    train_data_loader.set_sample_list_generator(train_batch_reader, places=fluid.cuda_places(gpu_id))
-
-    test_data_loader = fluid.io.DataLoader.from_generator(iterable=True, capacity=8, use_multiprocess=False)
-    test_data_loader.set_sample_list_generator(test_batch_reader, places=fluid.cuda_places(gpu_id))
+    train_loader = paddle.io.DataLoader(
+        dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True),
+        batch_size=args.train_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=True, num_workers=2)
+    test_loader = paddle.io.DataLoader(
+        dataloader.MyDataloader(test_left_img, test_right_img, test_left_disp, training=False),
+        batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=True, num_workers=2)
 
     model = Ownnet(args)
 
@@ -67,7 +61,7 @@ def main():
         model.set_dict(model_state)
 
     batch_len = 0
-    for batch_id, data in enumerate(train_data_loader()):
+    for batch_id, data in enumerate(train_loader()):
         batch_len += 1
 
     print("batch_len", batch_len)
@@ -87,26 +81,31 @@ def main():
 
         model.train()
 
-        for batch_id, data in enumerate(train_data_loader()):
+        for batch_id, data in enumerate(train_loader()):
             left_img, right_img, gt = data
+            # print(left_img.shape)
+            # print(gt.shape)
 
-            gt_mask = np.zeros(gt.shape, np.float32)
-            gt_mask[gt.numpy() > 0] = 1.0
-            useful_pixels = len(np.flatnonzero(gt_mask))
-            gt_mask = fluid.layers.assign(gt_mask)
-            # gt_mask.stop_gradient = True
-            gt = fluid.layers.elementwise_mul(gt, gt_mask)
+            mask = paddle.to_tensor(gt.numpy() > 0)
+            gt_mask = paddle.masked_select(gt, mask)
 
-            output = model(left_img, right_img)
+            # gt_mask = np.zeros(gt.shape, np.float32)
+            # gt_mask[gt.numpy() > 0] = 1.0
+            # useful_pixels = len(np.flatnonzero(gt_mask))
+            # gt_mask = fluid.layers.assign(gt_mask)
+            # # gt_mask.stop_gradient = True
+            # gt = fluid.layers.elementwise_mul(gt, gt_mask)
 
-            L1_loss = fluid.dygraph.L1Loss("mean")
+            outputs = model(left_img, right_img)
+            outputs = [paddle.squeeze(output) for output in outputs]
+
             tem_stage_loss = []
             for index in range(stages):
 
-                mask_output = fluid.layers.elementwise_mul(output[index], gt_mask)
+                # mask_output = fluid.layers.elementwise_mul(output[index], gt_mask)
                 # temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt))
-                temp_loss = L1_loss(mask_output, gt)
-                temp_loss = temp_loss * args.loss_weights[index] *(gt.shape[-4]*gt.shape[-3]*gt.shape[-1]*gt.shape[-2]) /useful_pixels
+                temp_loss = args.loss_weights[index]* F.smooth_l1_loss(paddle.masked_select(outputs[index], mask), gt_mask, reduction='mean')
+                # temp_loss = temp_loss * args.loss_weights[index] *(gt.shape[-4]*gt.shape[-3]*gt.shape[-1]*gt.shape[-2]) /useful_pixels
                 tem_stage_loss.append(temp_loss)
                 stage_loss_list[index] += temp_loss.numpy()
 
@@ -132,13 +131,14 @@ def main():
         with fluid.dygraph.no_grad():
             model.eval()
 
-            for batch_id, data in enumerate(test_data_loader()):
+            for batch_id, data in enumerate(test_loader()):
                 left_img, right_img, gt = data
 
-                output = model(left_img, right_img)
+                outputs = model(left_img, right_img)
+                outputs = [paddle.squeeze(output) for output in outputs]
 
                 for stage in range(stages):
-                    error_3pixel_list[stage] += error_estimating(output[stage].numpy(), gt.numpy())
+                    error_3pixel_list[stage] += error_estimating(outputs[stage].numpy(), gt.numpy())
                     error_3pixel = sum(error_3pixel_list)
 
                 info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in range(stages)]

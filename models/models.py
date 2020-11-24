@@ -19,6 +19,7 @@ class Ownnet(fluid.dygraph.Layer):
         for i in range(3):
             net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
+        self.volume_postprocess = fluid.dygraph.LayerList(self.volume_postprocess)
 
         self.refinement1_left = refinement1(in_channels=3, out_channels=32)
         self.refinement1_disp = refinement1(in_channels=1, out_channels=32)

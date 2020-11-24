@@ -140,62 +140,63 @@ def preconv2d_depthseperated(input, channel,
                                                              param_attr=layer_init_kaiming_normal(),
                                                              bias_attr=False))
 
-class Post_3DConvs(fluid.dygraph.Layer):
-    def __init__(self, layers, channels):
-        super(Post_3DConvs, self).__init__()
-        self.layers = layers
-        self.channels = channels
+# class Post_3DConvs(fluid.dygraph.Layer):
+#     def __init__(self, layers, channels):
+#         super(Post_3DConvs, self).__init__()
+#         self.layers = layers
+#         self.channels = channels
+#
+#         self.layer1 = batch_relu_conv3d(input=1,
+#                                         channel=channels,
+#                                         conv_param_attr=layer_init_kaiming_normal(),
+#                                         conv_bias_attr=False,
+#                                         bn_param_attr=layer_init_constant(1.0),
+#                                         bn_bias_attr=layer_init_constant(0.0))
+#         self.layer_list = []
+#         for i in range(self.layers):
+#             temp_layer = batch_relu_conv3d(input=channels,
+#                                            channel=channels,
+#                                            conv_param_attr=layer_init_kaiming_normal(),
+#                                            conv_bias_attr=False,
+#                                            bn_param_attr=layer_init_constant(1.0),
+#                                            bn_bias_attr=layer_init_constant(0.0))
+#             self.layer_list.append(temp_layer)
+#         self.layer_list = fluid.dygraph.LayerList(self.layer_list)
+#
+#         self.layer2 = batch_relu_conv3d(input=channels,
+#                                         channel=1,
+#                                         conv_param_attr=layer_init_kaiming_normal(),
+#                                         conv_bias_attr=False,
+#                                         bn_param_attr=layer_init_constant(1.0),
+#                                         bn_bias_attr=layer_init_constant(0.0))
+#
+#     def forward(self, input):
+#         output = self.layer1(input)
+#
+#         for i in range(self.layers):
+#             output = self.layer_list[i](output)
+#
+#         output = self.layer2(output)
+#
+#         return output
 
-        self.layer1 = batch_relu_conv3d(input=1,
-                                        channel=channels,
-                                        conv_param_attr=layer_init_kaiming_normal(),
-                                        conv_bias_attr=False,
-                                        bn_param_attr=layer_init_constant(1.0),
-                                        bn_bias_attr=layer_init_constant(0.0))
-        self.layer_list = []
-        for i in range(self.layers):
-            temp_layer = batch_relu_conv3d(input=channels,
-                                           channel=channels,
-                                           conv_param_attr=layer_init_kaiming_normal(),
-                                           conv_bias_attr=False,
-                                           bn_param_attr=layer_init_constant(1.0),
-                                           bn_bias_attr=layer_init_constant(0.0))
-            self.layer_list.append(temp_layer)
 
-        self.layer2 = batch_relu_conv3d(input=channels,
-                                        channel=1,
-                                        conv_param_attr=layer_init_kaiming_normal(),
-                                        conv_bias_attr=False,
-                                        bn_param_attr=layer_init_constant(1.0),
-                                        bn_bias_attr=layer_init_constant(0.0))
-
-    def forward(self, input):
-        output = self.layer1(input)
-
-        for i in range(self.layers):
-            output = self.layer_list[i](output)
-
-        output = self.layer2(output)
-
-        return output
-
-
-# def Post_3DConvs(layers, channels):
-#         output = [batch_relu_conv3d(input=1,
-#                                     channel=channels,
-#                                     conv_param_attr=layer_init_kaiming_normal(),
-#                                     conv_bias_attr=False,
-#                                     bn_param_attr=layer_init_constant(1.0),
-#                                     bn_bias_attr=layer_init_constant(0.0))]
-#         for i in range(layers):
-#             output = output + [batch_relu_conv3d(input=channels,
-#                                                  channel=channels,
-#                                                  conv_param_attr=layer_init_kaiming_normal(),
-#                                                  conv_bias_attr=False,
-#                                                  bn_param_attr=layer_init_constant(1.0),
-#                                                  bn_bias_attr=layer_init_constant(0.0))]
-#         output = output + [batch_relu_conv3d(input=channels, channel=1, conv_param_attr=layer_init_kaiming_normal())]
-#         return fluid.dygraph.Sequential(*output)
+def Post_3DConvs(layers, channels):
+        output = [batch_relu_conv3d(input=1,
+                                    channel=channels,
+                                    conv_param_attr=layer_init_kaiming_normal(),
+                                    conv_bias_attr=False,
+                                    bn_param_attr=layer_init_constant(1.0),
+                                    bn_bias_attr=layer_init_constant(0.0))]
+        for i in range(layers):
+            output = output + [batch_relu_conv3d(input=channels,
+                                                 channel=channels,
+                                                 conv_param_attr=layer_init_kaiming_normal(),
+                                                 conv_bias_attr=False,
+                                                 bn_param_attr=layer_init_constant(1.0),
+                                                 bn_bias_attr=layer_init_constant(0.0))]
+        output = output + [batch_relu_conv3d(input=channels, channel=1, conv_param_attr=layer_init_kaiming_normal())]
+        return fluid.dygraph.Sequential(*output)
 
 def refinement1(in_channels, out_channels):
 
