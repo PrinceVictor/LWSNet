@@ -17,7 +17,7 @@ parser.add_argument('--channels_3d', type=int, default=8, help='number of initia
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--gpu_id', type=int, default=0)
-parser.add_argument('--model', type=str, default="test")
+parser.add_argument('--model', type=str, default="one_loss")
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -30,8 +30,8 @@ if __name__ == "__main__":
 
     left_img = cv2.imread("/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_2/000004_10.png", cv2.IMREAD_UNCHANGED)
     right_img = cv2.imread("/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_3/000004_10.png", cv2.IMREAD_UNCHANGED)
-    left_image = left_img[:, :, ::-1].astype(np.float32)/256*2 - 1
-    right_image = right_img[:, :, ::-1].astype(np.float32)/256*2 - 1
+    left_image = left_img[:, :, ::-1].astype(np.float32)
+    right_image = right_img[:, :, ::-1].astype(np.float32)
 
     h, w, c = left_img.shape
     th, tw = 368, 1232
@@ -56,9 +56,10 @@ if __name__ == "__main__":
 
     for stage in range(stages):
         disp = (output[stage][0][0].numpy()).astype(np.uint8)
+        # cv2.normalize(disp, disp, 0, 256, cv2.NORM_MINMAX)
         disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
 
-        # cv2.imshow("disp", disp)
-        # cv2.imshow("left_img", left_img)
-        # cv2.waitKey(0)
+        cv2.imshow("disp", disp)
+        cv2.imshow("left_img", left_img)
+        cv2.waitKey(0)
 

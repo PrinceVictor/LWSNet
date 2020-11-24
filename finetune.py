@@ -25,12 +25,13 @@ parser.add_argument('--channels_3d', type=int, default=8, help='number of initia
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-parser.add_argument('--epoch', type=int, default=150)
+parser.add_argument('--epoch', type=int, default=200)
 parser.add_argument('--train_batch_size', type=int, default=8)
 parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--model', type=str, default="test")
-parser.add_argument('--resume', action='store_true', default=False,)
+parser.add_argument('--resume', action='store_true', default=False)
+parser.add_argument('--split_file', type=str, default='split.txt')
 
 args = parser.parse_args()
 
@@ -45,14 +46,14 @@ def main():
     fluid.enable_imperative(place)
 
     train_left_img, train_right_img, train_left_disp, \
-    test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath)
+    test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath, args.split_file)
 
     train_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True),
         batch_size=args.train_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=True, num_workers=2)
     test_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(test_left_img, test_right_img, test_left_disp, training=False),
-        batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=True, num_workers=2)
+        batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=False, drop_last=True, num_workers=2)
 
     model = Ownnet(args)
 
@@ -66,7 +67,7 @@ def main():
 
     print("batch_len", batch_len)
 
-    boundaries = [300 * batch_len, 500 * batch_len]
+    boundaries = [70 * batch_len, 150 * batch_len]
     values = [args.lr, args.lr*0.1, args.lr*0.01]
     adam = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
                                 parameter_list=model.parameters())
@@ -83,18 +84,9 @@ def main():
 
         for batch_id, data in enumerate(train_loader()):
             left_img, right_img, gt = data
-            # print(left_img.shape)
-            # print(gt.shape)
 
             mask = paddle.to_tensor(gt.numpy() > 0)
             gt_mask = paddle.masked_select(gt, mask)
-
-            # gt_mask = np.zeros(gt.shape, np.float32)
-            # gt_mask[gt.numpy() > 0] = 1.0
-            # useful_pixels = len(np.flatnonzero(gt_mask))
-            # gt_mask = fluid.layers.assign(gt_mask)
-            # # gt_mask.stop_gradient = True
-            # gt = fluid.layers.elementwise_mul(gt, gt_mask)
 
             outputs = model(left_img, right_img)
             outputs = [paddle.squeeze(output) for output in outputs]
@@ -102,19 +94,15 @@ def main():
             tem_stage_loss = []
             for index in range(stages):
 
-                # mask_output = fluid.layers.elementwise_mul(output[index], gt_mask)
-                # temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt))
                 temp_loss = args.loss_weights[index]* F.smooth_l1_loss(paddle.masked_select(outputs[index], mask), gt_mask, reduction='mean')
-                # temp_loss = temp_loss * args.loss_weights[index] *(gt.shape[-4]*gt.shape[-3]*gt.shape[-1]*gt.shape[-2]) /useful_pixels
                 tem_stage_loss.append(temp_loss)
                 stage_loss_list[index] += temp_loss.numpy()
 
-            # sum_loss = fluid.layers.sum(tem_stage_loss)
-            sum_loss = tem_stage_loss[3]
+            sum_loss = fluid.layers.sum(tem_stage_loss)
+            # sum_loss = tem_stage_loss[3]
             sum_loss.backward()
             adam.minimize(sum_loss)
             model.clear_gradients()
-            # raise StopIteration
 
             sum_losses_rec += sum_loss.numpy()
 
@@ -122,10 +110,10 @@ def main():
             info_str = '\t'.join(info_str)
 
             print("Train: epoch {}, batch_id {} learn_lr {:.5f} sum_loss {} \t {}".format(epoch,
-                                                                                      batch_id,
-                                                                                      adam.current_step_lr(),
-                                                                                      np.round(sum_losses_rec / (batch_id + 1),3),
-                                                                                      info_str))
+                                                                                          batch_id,
+                                                                                          adam.current_step_lr(),
+                                                                                          np.round(sum_losses_rec / (batch_id + 1),3),
+                                                                                          info_str))
 
 
         with fluid.dygraph.no_grad():
@@ -146,7 +134,7 @@ def main():
 
                 print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}" .format(epoch,
                                                                                   batch_id,
-                                                                                  round(error_3pixel/(batch_id+1), 3),
+                                                                                  round(error_3pixel/(batch_id+1), 4),
                                                                                   info_str))
 
                 # for batch_size_I in range(args.test_batch_size):
