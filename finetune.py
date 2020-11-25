@@ -7,10 +7,11 @@ import paddle.fluid as fluid
 import os
 import glob
 import math
-import cv2
+
+import numpy as np
 import utils.logger as logger
 from utils.utils import AverageMeter as AverageMeter
-from models.models import *
+from models.models import Ownnet
 from dataloader import kitti2015load as kitti
 from dataloader import dataloader
 
@@ -18,16 +19,16 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-# parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
-parser.add_argument('--datapath', default='/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/training/', help='datapath')
+parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
+# parser.add_argument('--datapath', default='/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/training/', help='datapath')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
 parser.add_argument('--channels_3d', type=int, default=8, help='number of initial channels 3d feature extractor ')
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
-parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-parser.add_argument('--epoch', type=int, default=200)
+parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
+parser.add_argument('--epoch', type=int, default=300)
 parser.add_argument('--last_epoch', type=int, default=-1)
 parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=4)
@@ -74,7 +75,7 @@ def main():
     last_epoch = 0
     error_check = math.inf
 
-    boundaries = [70 * train_batch_len, 150 * train_batch_len]
+    boundaries = [200 * train_batch_len, 400 * train_batch_len]
     values = [args.lr, args.lr * 0.1, args.lr * 0.01]
     optimizer = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
                                      parameter_list=model.parameters())

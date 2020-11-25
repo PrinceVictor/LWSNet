@@ -9,7 +9,7 @@ import os
 import glob
 import math
 
-from models.models import *
+from models.models import Ownnet
 from dataloader import sceneflow as sf
 from dataloader import dataloader
 import utils.logger as logger
