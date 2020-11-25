@@ -117,10 +117,11 @@ def main():
             for batch_id, data in enumerate(test_loader()):
                 left_img, right_img, gt = data
 
-                output = model(left_img, right_img)
+                outputs = model(left_img, right_img)
+                outputs = [paddle.squeeze(output) for output in outputs]
 
                 for stage in range(stages):
-                    error_3pixel_list[stage] += error_estimating(output[stage].numpy(), gt.numpy())
+                    error_3pixel_list[stage] += error_estimating(outputs[stage].numpy(), gt.numpy())
                     error_3pixel = sum(error_3pixel_list)
 
                 info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in
