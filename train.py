@@ -45,7 +45,6 @@ def main():
 
     LOG.info("pretrain Sceneflow main()")
 
-    stages = 4
     gpu_id = args.gpu_id
 
     place = fluid.CUDAPlace(gpu_id)
@@ -77,19 +76,20 @@ def main():
     if args.resume:
         if len(glob.glob(args.resume + "*.pdparams")):
             model_state = paddle.load(glob.glob(args.resume + "*.pdparams")[0])
-            model.set_dict(model_state)
+            model.set_state_dict(model_state)
             LOG.info("load model state")
 
         if len(glob.glob(args.resume + "*.pdopt")):
             opt_state = paddle.load(glob.glob(args.resume + "*.pdopt")[0])
-            optimizer.set_dict(opt_state)
+            optimizer.set_state_dict(opt_state)
             LOG.info("load optimizer state")
 
         if len(glob.glob(args.resume + "*.params")):
             param_state = paddle.load(glob.glob(args.resume + "*.params")[0])
             last_epoch = param_state["epoch"] + 1
+            last_lr = param_state["lr"]
             error_check = param_state["error"]
-            LOG.info("load last epoch and error")
+            LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}".format(last_epoch, last_lr, error_check))
 
         LOG.info("resume successfully")
 
@@ -107,7 +107,10 @@ def main():
 
             paddle.save(model.state_dict(), save_filename + ".pdparams")
             paddle.save(optimizer.state_dict(), save_filename + ".pdopt")
-            paddle.save({"epoch": epoch, "error": error_check}, save_filename + ".params")
+            paddle.save({"epoch": epoch,
+                         "lr": optimizer.get_lr(),
+                         "error": error_check},
+                        save_filename + ".params")
             LOG.info("save model param success")
 
 def train(model, data_loader, optimizer, epoch, LOG):
@@ -135,10 +138,10 @@ def train(model, data_loader, optimizer, epoch, LOG):
             stage_loss.append(loss)
             losses[index].update(float(loss.numpy()) / args.loss_weights[index])
 
-        sum_loss = fluid.layers.sum(stage_loss)
+        sum_loss = paddle.add_n(stage_loss)
         sum_loss.backward()
-        optimizer.minimize(sum_loss)
-        model.clear_gradients()
+        optimizer.step()
+        optimizer.clear_grad()
 
         if batch_id % 5 == 0:
             info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]

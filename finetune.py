@@ -48,11 +48,11 @@ def main():
 
     LOG.info("finetune KITTI main()")
 
-    stages = 4
     gpu_id = args.gpu_id
 
-    place = fluid.CUDAPlace(gpu_id)
-    fluid.enable_imperative(place)
+    paddle.set_device("gpu:"+str(gpu_id))
+    # place = fluid.CUDAPlace(gpu_id)
+    # fluid.enable_imperative(place)
 
     train_left_img, train_right_img, train_left_disp, \
     test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath, args.split_file)
@@ -144,7 +144,7 @@ def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
             tem_stage_loss.append(temp_loss)
             losses[index].update(float(temp_loss.numpy() / args.loss_weights[index]))
 
-        sum_loss = fluid.layers.sum(tem_stage_loss)
+        sum_loss = paddle.add_n(tem_stage_loss)
         sum_loss.backward()
         optimizer.step()
         optimizer.clear_grad()
