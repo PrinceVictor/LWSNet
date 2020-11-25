@@ -84,7 +84,7 @@ class MyDataloader(Dataset):
             else:
                 left_img = left_img.crop((w - 960, h - 544, w, h))
                 right_img = right_img.crop((w - 960, h - 544, w, h))
-                dataL = dataL[h - 544:h, w - 960:w]
+                # dataL = dataL[h - 544:h, w - 960:w]
 
             left_img = self.tramsform(left_img)
             right_img = self.tramsform(right_img)

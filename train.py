@@ -7,6 +7,7 @@ from paddle.io import DataLoader
 from models.models import *
 from dataloader import sceneflow as sf
 from dataloader import dataloader
+from utils.utils import AverageMeter as AverageMeter
 
 parser = argparse.ArgumentParser(description='pretrain Sceneflow main()')
 
@@ -22,7 +23,7 @@ parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help=
 parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=10)
 parser.add_argument('--train_batch_size', type=int, default=8)
-parser.add_argument('--test_batch_size', type=int, default=16)
+parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--model', type=str, default="test")
 parser.add_argument('--resume', action='store_true', default=False,)
@@ -47,6 +48,8 @@ def main():
     test_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(test_left_img, test_right_img, test_left_disp, training=False, kitti_set=False),
         batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=False, drop_last=False, num_workers=2)
+    train_batch_len, test_batch_len = len(train_loader), len(test_loader)
+    # LOG.info("train batch_len {} test batch_len {}".format(train_batch_len, test_batch_len))
 
     model = Ownnet(args)
 
@@ -54,9 +57,7 @@ def main():
         model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
         model.set_dict(model_state)
 
-    batch_len = 0
-    # for batch_id, data in enumerate(train_loader()):
-    #     batch_len += 1
+
 
     print("batch_len", batch_len)
 
@@ -111,33 +112,36 @@ def main():
                                                                                           np.round(sum_losses_rec / (
                                                                                                       batch_id + 1), 3),
                                                                                           info_str))
-        with fluid.dygraph.no_grad():
-            model.eval()
 
-            for batch_id, data in enumerate(test_loader()):
-                left_img, right_img, gt = data
+        EPEs = [AverageMeter() for _ in range(stages)]
+        model.eval()
 
+        for batch_id, data in enumerate(test_loader()):
+            left_img, right_img, gt = data
+
+            gt = gt.numpy()
+            mask = gt < args.maxdisp
+
+            with fluid.dygraph.no_grad():
                 outputs = model(left_img, right_img)
-                outputs = [paddle.squeeze(output) for output in outputs]
 
                 for stage in range(stages):
-                    error_3pixel_list[stage] += error_estimating(outputs[stage].numpy(), gt.numpy())
-                    error_3pixel = sum(error_3pixel_list)
+                    if len(gt[mask]) == 0:
+                        continue
+                    output = paddle.squeeze(outputs[stage], 1).numpy()
+                    output = output[:, 4:, :]
+                    EPEs[stage].update(np.mean(np.abs(output[mask], gt[mask])))
 
-                info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in
-                            range(stages)]
-                info_str = '\t'.join(info_str)
+            info_str = '\t'.join(['Stage {} = {:.2f}({:.2f})'.format(x, EPEs[x].val, EPEs[x].avg) for x in range(stages)])
+            print('Test: [{}/{}] {}'.format(batch_id, test_batch_len, info_str))
 
-                print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}".format(epoch,
-                                                                                 batch_id,
-                                                                                 round(error_3pixel / (batch_id + 1), 3),
-                                                                                 info_str))
+        info_str = ', '.join(['Stage {}={:.2f}'.format(x, EPEs[x].avg) for x in range(stages)])
+        print('Average test EPE = ' + info_str)
 
-            if error_3pixel / (batch_id + 1) < error_3pixel_check:
-                error_3pixel_check = error_3pixel / (batch_id + 1)
-
-                fluid.save_dygraph(model.state_dict(), "results/"+args.model)
-                print("save model param success")
+        if EPEs[-1].avg < error_3pixel_check:
+            error_3pixel_check = EPEs[-1].avg
+            fluid.save_dygraph(model.state_dict(), "results/"+args.model)
+            print("save model param success")
 
 
 def error_estimating(disp, ground_truth, maxdisp=192):

@@ -8,6 +8,7 @@ import os
 import glob
 import cv2
 import utils.logger as logger
+from utils.utils import AverageMeter as AverageMeter
 from models.models import *
 from dataloader import kitti2015load as kitti
 from dataloader import dataloader
@@ -26,6 +27,7 @@ parser.add_argument('--layers_3d', type=int, default=4, help='number of initial 
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
 parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
 parser.add_argument('--epoch', type=int, default=200)
+parser.add_argument('--last_epoch', type=int, default=-1)
 parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=4)
 parser.add_argument('--gpu_id', type=int, default=0)
@@ -67,36 +69,40 @@ def main():
     save_filename = os.path.join(args.save_path, args.model)
 
     model = Ownnet(args)
+
+    last_epoch = 0
+    error_check = np.inf
+
     boundaries = [70 * train_batch_len, 150 * train_batch_len]
     values = [args.lr, args.lr * 0.1, args.lr * 0.01]
     optimizer = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
                                      parameter_list=model.parameters())
 
     if args.resume:
-
         if len(glob.glob(args.resume+"*.pdparams")):
             model_state = paddle.load(glob.glob(args.resume+"*.pdparams")[0])
             model.set_dict(model_state)
+            LOG.info("load model state")
+
         if len(glob.glob(args.resume+"*.pdopt")):
-            opt_state = paddle.load(glob.glob(args.resume+"*.pdparams")[0])
-            optimizer.set_dict(model_state)
+            opt_state = paddle.load(glob.glob(args.resume+"*.pdopt")[0])
+            optimizer.set_dict(opt_state)
+            LOG.info("load optimizer state")
+
         if len(glob.glob(args.resume+"*.params")):
-            param_state = paddle.load(glob.glob(args.resume+"*.pdparams")[0])
-            model.set_dict(model_state)
+            param_state = paddle.load(glob.glob(args.resume+"*.params")[0])
+            last_epoch = param_state["epoch"] + 1
+            error_check = param_state["error"]
+            LOG.info("load last epoch and error")
 
-    epoch = 0
+        LOG.info("resume successfully")
 
-    # checkpoint = paddle.load(save_filename + ".param")
-    # print(checkpoint)
+    if args.last_epoch != -1:
+        last_epoch = args.last_epoch
 
-    error_3pixel_check = np.inf
+    for epoch in range(last_epoch, args.epoch):
 
-    for epoch in range(args.epoch):
-        stage_loss_list = np.zeros((4), dtype=np.float32)
-        sum_losses_rec = 0
-        error_3pixel_list = np.zeros((4), dtype=np.float32)
-        error_3pixel = 0
-
+        losses = [AverageMeter() for _ in range(stages)]
         model.train()
 
         for batch_id, data in enumerate(train_loader()):
@@ -113,78 +119,62 @@ def main():
 
                 temp_loss = args.loss_weights[index]* F.smooth_l1_loss(paddle.masked_select(outputs[index], mask), gt_mask, reduction='mean')
                 tem_stage_loss.append(temp_loss)
-                stage_loss_list[index] += temp_loss.numpy()
+                losses[index].update(float(temp_loss.numpy()))
 
             sum_loss = fluid.layers.sum(tem_stage_loss)
-            # sum_loss = tem_stage_loss[3]
             sum_loss.backward()
             optimizer.minimize(sum_loss)
             model.clear_gradients()
 
-            sum_losses_rec += sum_loss.numpy()
+            if batch_id % 5 == 0:
+                info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
+                info_str = '\t'.join(info_str)
 
-            info_str = ['Stage {} = {:.2f}'.format(x, float(stage_loss_list[x]/ (batch_id + 1))) for x in range(stages)]
-            info_str = '\t'.join(info_str)
+                LOG.info('Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, train_batch_len, optimizer.current_step_lr(), info_str))
 
-            print("Train: epoch {}, batch_id {} learn_lr {:.5f} sum_loss {} \t {}".format(epoch,
-                                                                                          batch_id,
-                                                                                          optimizer.current_step_lr(),
-                                                                                          np.round(sum_losses_rec / (batch_id + 1),3),
-                                                                                          info_str))
+        info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
+        LOG.info('Average train loss = ' + info_str)
 
+        D1s = [AverageMeter() for _ in range(stages)]
+        model.eval()
 
-        with fluid.dygraph.no_grad():
-            model.eval()
+        for batch_id, data in enumerate(test_loader()):
+            left_img, right_img, gt = data
 
-            for batch_id, data in enumerate(test_loader()):
-                left_img, right_img, gt = data
-
+            with paddle.no_grad():
                 outputs = model(left_img, right_img)
                 outputs = [paddle.squeeze(output) for output in outputs]
 
                 for stage in range(stages):
-                    error_3pixel_list[stage] += error_estimating(outputs[stage].numpy(), gt.numpy())
-                    error_3pixel = sum(error_3pixel_list)
+                    output = paddle.squeeze(outputs[stage], 1)
+                    D1s[stage].update(error_estimating(output.numpy(), gt.numpy()))
 
-                info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in range(stages)]
-                info_str = '\t'.join(info_str)
+                info_str = '\t'.join(
+                    ['Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
 
-                print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}" .format(epoch,
-                                                                                  batch_id,
-                                                                                  round(error_3pixel/(batch_id+1), 4),
-                                                                                  info_str))
+                LOG.info('[{}/{}] {}'.format(batch_id, test_batch_len, info_str))
 
-                # for batch_size_I in range(args.test_batch_size):
-                #     disp = (output[3][batch_size_I][0].numpy()).astype(np.uint8)
-                #     disp = cv2.applyColorMap(cv2.convertScaleAbs(disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
-                #
-                #     gt_disp = (gt[batch_size_I][0].numpy()).astype(np.uint8)
-                #     gt_disp = cv2.applyColorMap(cv2.convertScaleAbs(gt_disp, alpha=1.0, beta=0), cv2.COLORMAP_JET)
-                #     cv2.imshow("disp", disp)
-                #     cv2.imshow("gt_disp", gt_disp)
-                #     cv2.waitKey(0)
-                #
-                # raise StopIteration
+        info_str = ', '.join(['Stage {}={:.4f}'.format(x, D1s[x].avg) for x in range(stages)])
+        LOG.info('Average test 3-Pixel Error = ' + info_str)
 
-            if error_3pixel / (batch_id + 1) < error_3pixel_check:
-                error_3pixel_check = error_3pixel / (batch_id + 1)
+        if D1s[-1].avg < error_check:
 
-                # paddle.save(model.state_dict(), save_filename+".pdparams")
-                # paddle.save(optimizer.state_dict(), save_filename+".pdopt")
-                # paddle.save({"epoch":epoch, "error":3}, save_filename + ".param")
-                print("save model param success")
+                error_check = D1s[-1].avg
+
+                paddle.save(model.state_dict(), save_filename+".pdparams")
+                paddle.save(optimizer.state_dict(), save_filename+".pdopt")
+                paddle.save({"epoch":epoch, "error":error_check}, save_filename+".params")
+                LOG.info("save model param success")
 
 
 def error_estimating(disp, ground_truth, maxdisp=192):
     gt = ground_truth
-    # print(disp.shape, ground_truth.shape, np.max(gt), np.min(gt))
     mask = gt > 0
     mask = mask * (gt < maxdisp)
 
     errmap = np.abs(disp - gt)
     err3 = ((errmap[mask] > 3.) & (errmap[mask] / gt[mask] > 0.05)).sum()
     return float(err3) / float(mask.sum())
-
 
 if __name__ == "__main__":
 
