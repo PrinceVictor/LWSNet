@@ -17,7 +17,7 @@ class Ownnet(fluid.dygraph.Layer):
         self.volume_postprocess = []
 
         for i in range(3):
-            net3d = Post_3DConvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
+            net3d = post_3dconvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
         self.volume_postprocess = fluid.dygraph.LayerList(self.volume_postprocess)
 
