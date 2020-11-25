@@ -6,6 +6,7 @@ import paddle.fluid as fluid
 
 import os
 import glob
+import math
 import cv2
 import utils.logger as logger
 from utils.utils import AverageMeter as AverageMeter
@@ -31,7 +32,7 @@ parser.add_argument('--last_epoch', type=int, default=-1)
 parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=4)
 parser.add_argument('--gpu_id', type=int, default=0)
-parser.add_argument('--save_path', type=str, default="results/test/")
+parser.add_argument('--save_path', type=str, default="results/finetune/")
 parser.add_argument('--model', type=str, default="checkpoint")
 parser.add_argument('--resume', type=str, default="")
 parser.add_argument('--split_file', type=str, default='split.txt')
@@ -71,7 +72,7 @@ def main():
     model = Ownnet(args)
 
     last_epoch = 0
-    error_check = np.inf
+    error_check = math.inf
 
     boundaries = [70 * train_batch_len, 150 * train_batch_len]
     values = [args.lr, args.lr * 0.1, args.lr * 0.01]
@@ -119,7 +120,7 @@ def main():
 
                 temp_loss = args.loss_weights[index]* F.smooth_l1_loss(paddle.masked_select(outputs[index], mask), gt_mask, reduction='mean')
                 tem_stage_loss.append(temp_loss)
-                losses[index].update(float(temp_loss.numpy()))
+                losses[index].update(float(temp_loss.numpy()/args.loss_weights[index]))
 
             sum_loss = fluid.layers.sum(tem_stage_loss)
             sum_loss.backward()
@@ -159,12 +160,12 @@ def main():
 
         if D1s[-1].avg < error_check:
 
-                error_check = D1s[-1].avg
+            error_check = D1s[-1].avg
 
-                paddle.save(model.state_dict(), save_filename+".pdparams")
-                paddle.save(optimizer.state_dict(), save_filename+".pdopt")
-                paddle.save({"epoch":epoch, "error":error_check}, save_filename+".params")
-                LOG.info("save model param success")
+            paddle.save(model.state_dict(), save_filename+".pdparams")
+            paddle.save(optimizer.state_dict(), save_filename+".pdopt")
+            paddle.save({"epoch":epoch, "error":error_check}, save_filename+".params")
+            LOG.info("save model param success")
 
 
 def error_estimating(disp, ground_truth, maxdisp=192):
