@@ -17,7 +17,7 @@ def setup_logger(name, save_path=None):
         datefmt='%Y-%m-%d %H:%M:%S')
 
     logger = logging.getLogger(file_name)
-    stream_handler = logging.StreamHandler(stream=sys.stdout)
+    stream_handler = logging.StreamHandler(stream=sys.stderr)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(log_formatter)
     logger.addHandler(stream_handler)
