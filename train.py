@@ -1,37 +1,50 @@
 import argparse
 import paddle
+import paddle.nn.functional as F
 import paddle.fluid as fluid
+from paddle.io import DataLoader
 
-from models.models import *
+import numpy as np
+import os
+import glob
+import math
+
+from models.models import Ownnet
 from dataloader import sceneflow as sf
 from dataloader import dataloader
+import utils.logger as logger
+from utils.utils import AverageMeter as AverageMeter
 
-parser = argparse.ArgumentParser(description='finetune KITTI')
+parser = argparse.ArgumentParser(description='pretrain Sceneflow main()')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/sceneflow')
+parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/sceneflow/')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
 parser.add_argument('--channels_3d', type=int, default=8, help='number of initial channels 3d feature extractor ')
 parser.add_argument('--layers_3d', type=int, default=4, help='number of initial layers in 3d network')
 parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help='growth rate in the 3d network')
-parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=10)
+parser.add_argument('--last_epoch', type=int, default=-1)
 parser.add_argument('--train_batch_size', type=int, default=8)
-parser.add_argument('--test_batch_size', type=int, default=16)
-parser.add_argument('--gpu_id', type=int, default=3)
-parser.add_argument('--model', type=str, default="test")
-parser.add_argument('--resume', action='store_true', default=False,)
-
+parser.add_argument('--test_batch_size', type=int, default=8)
+parser.add_argument('--gpu_id', type=int, default=0)
+parser.add_argument('--save_path', type=str, default="results/pretrained/")
+parser.add_argument('--model', type=str, default="checkpoint")
+parser.add_argument('--resume', type=str, default="")
 args = parser.parse_args()
 
 def main():
 
-    print("finetune KITTI main()")
+    LOG = logger.setup_logger(__file__, "./log/")
+    for key, value in vars(args).items():
+        LOG.info(str(key) + ': ' + str(value))
 
-    stages = 4
+    LOG.info("pretrain Sceneflow main()")
+
     gpu_id = args.gpu_id
 
     place = fluid.CUDAPlace(gpu_id)
@@ -39,117 +52,138 @@ def main():
 
     train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = sf.dataloader(args.datapath)
 
-    # train_left_img, train_right_img, train_left_disp, \
-    # test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath)
+    train_loader = paddle.io.DataLoader(
+        dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True, kitti_set=False),
+        batch_size=args.train_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=False, num_workers=2)
+    test_loader = paddle.io.DataLoader(
+        dataloader.MyDataloader(test_left_img, test_right_img, test_left_disp, training=False, kitti_set=False),
+        batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=False, drop_last=False, num_workers=2)
 
-    train_loader = dataloader.sceneflow_dataloader(train_left_img, train_right_img, train_left_disp, training=True)
-    test_loader = dataloader.sceneflow_dataloader(test_left_img, test_right_img, test_left_disp, training=False)
+    train_batch_len, test_batch_len = len(train_loader), len(test_loader)
+    LOG.info("train batch_len {} test batch_len {}".format(train_batch_len, test_batch_len))
 
-    train_reader = train_loader.create_reader()
-    train_batch_reader = paddle.batch(reader=train_reader, batch_size=args.train_batch_size, drop_last=True)
-
-    test_reader = test_loader.create_reader()
-    test_batch_reader = paddle.batch(reader=test_reader, batch_size=args.test_batch_size, drop_last=True)
-
-    train_data_loader = fluid.io.DataLoader.from_generator(iterable=True, capacity=4)
-    train_data_loader.set_sample_list_generator(train_batch_reader, places=fluid.cuda_places(gpu_id))
-
-    test_data_loader = fluid.io.DataLoader.from_generator(iterable=True, capacity=4)
-    test_data_loader.set_sample_list_generator(test_batch_reader, places=fluid.cuda_places(gpu_id))
+    if not os.path.isdir(args.save_path):
+        os.makedirs(args.save_path)
+    save_filename = os.path.join(args.save_path, args.model)
 
     model = Ownnet(args)
 
+    last_epoch = 0
+    error_check = math.inf
+
+    optimizer = paddle.optimizer.Adam(learning_rate=args.lr, parameters=model.parameters())
+
     if args.resume:
-        model_state, _ = fluid.dygraph.load_dygraph("results/"+args.model)
-        model.set_dict(model_state)
+        if len(glob.glob(args.resume + "*.pdparams")):
+            model_state = paddle.load(glob.glob(args.resume + "*.pdparams")[0])
+            model.set_state_dict(model_state)
+            LOG.info("load model state")
 
-    batch_len = 0
-    for batch_id, data in enumerate(train_data_loader()):
-        batch_len += 1
+        if len(glob.glob(args.resume + "*.pdopt")):
+            opt_state = paddle.load(glob.glob(args.resume + "*.pdopt")[0])
+            optimizer.set_state_dict(opt_state)
+            LOG.info("load optimizer state")
 
-    print("batch_len", batch_len)
+        if len(glob.glob(args.resume + "*.params")):
+            param_state = paddle.load(glob.glob(args.resume + "*.params")[0])
+            last_epoch = param_state["epoch"] + 1
+            last_lr = param_state["lr"]
+            error_check = param_state["error"]
+            LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}".format(last_epoch, last_lr, error_check))
 
-    boundaries = [50*batch_len, 150*batch_len, 300*batch_len]
-    values = [args.lr, args.lr * 0.1, args.lr * 0.01, args.lr * 0.001]
-    adam = fluid.optimizer.Adam(learning_rate=fluid.dygraph.PiecewiseDecay(boundaries, values, 0),
-                                parameter_list=model.parameters())
+        LOG.info("resume successfully")
 
-    error_3pixel_check = np.inf
+    if args.last_epoch != -1:
+        last_epoch = args.last_epoch
 
-    for epoch in range(args.epoch):
-        stage_loss_list = np.zeros((4), dtype=np.float32)
-        sum_losses_rec = 0
-        error_3pixel_list = np.zeros((4), dtype=np.float32)
-        error_3pixel = 0
+    for epoch in range(last_epoch, args.epoch):
 
-        model.train()
+        train(model, train_loader, optimizer, epoch, LOG)
 
-        for batch_id, data in enumerate(train_data_loader()):
-            left_img, right_img, gt = data
+        error = test(model, test_loader, epoch, LOG)
 
-            gt_mask = np.zeros(gt.shape, np.float32)
-            gt_mask[gt.numpy() < 192] = 1.0
-            useful_pixels = len(np.flatnonzero(gt_mask))
-            gt_mask = fluid.layers.assign(gt_mask)
-            gt = fluid.layers.elementwise_mul(gt, gt_mask)
+        if error < error_check:
+            error_check = error
 
-            output = model(left_img, right_img)
+            paddle.save(model.state_dict(), save_filename + ".pdparams")
+            paddle.save(optimizer.state_dict(), save_filename + ".pdopt")
+            paddle.save({"epoch": epoch,
+                         "lr": optimizer.get_lr(),
+                         "error": error_check},
+                        save_filename + ".params")
+            LOG.info("save model param success")
 
-            L1_loss = fluid.dygraph.L1Loss("mean")
-            tem_stage_loss = []
-            for index in range(stages):
+def train(model, data_loader, optimizer, epoch, LOG):
 
-                mask_output = fluid.layers.elementwise_mul(output[index], gt_mask)
-                # temp_loss = fluid.layers.reduce_mean(fluid.layers.smooth_l1(mask_output, gt))
-                temp_loss = L1_loss(mask_output, gt)
-                temp_loss = temp_loss * args.loss_weights[index] * (gt.shape[-1] * gt.shape[-2]) / useful_pixels
-                tem_stage_loss.append(temp_loss)
-                stage_loss_list[index] += temp_loss.numpy()
+    stages = 4
+    losses = [AverageMeter() for _ in range(stages)]
+    length_loader = len(data_loader)
+    model.train()
 
-            sum_loss = fluid.layers.sum(tem_stage_loss)
-            sum_loss.backward()
-            adam.minimize(sum_loss)
-            model.clear_gradients()
-            # raise StopIteration
+    for batch_id, data in enumerate(data_loader()):
+        left_img, right_img, gt = data
 
-            sum_losses_rec += sum_loss.numpy()
+        mask = paddle.to_tensor(gt.numpy() < args.maxdisp)
+        gt_mask = paddle.masked_select(gt, mask)
+        if paddle.cast(mask, "float32").sum() == 0:
+            continue
 
-            info_str = ['Stage {} = {:.2f}'.format(x, float(stage_loss_list[x] / (batch_id + 1))) for x in
-                        range(stages)]
+        outputs = model(left_img, right_img)
+        outputs = [paddle.squeeze(output) for output in outputs]
+
+        stage_loss = []
+        for index in range(stages):
+            loss = args.loss_weights[index] * F.smooth_l1_loss(paddle.masked_select(outputs[index], mask),
+                                                               gt_mask, reduction='mean')
+            stage_loss.append(loss)
+            losses[index].update(float(loss.numpy()) / args.loss_weights[index])
+
+        sum_loss = paddle.add_n(stage_loss)
+        sum_loss.backward()
+        optimizer.step()
+        optimizer.clear_grad()
+
+        if batch_id % 5 == 0:
+            info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
             info_str = '\t'.join(info_str)
 
-            print("Train: epoch {}, batch_id {} learn_lr {:.5f} sum_loss {} \t {}".format(epoch,
-                                                                                          batch_id,
-                                                                                          adam.current_step_lr(),
-                                                                                          np.round(sum_losses_rec / (
-                                                                                                      batch_id + 1), 3),
-                                                                                          info_str))
+            LOG.info(
+                'Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
+                                                        info_str))
 
-        model.eval()
+    info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
+    LOG.info('Average train loss = ' + info_str)
 
-        for batch_id, data in enumerate(test_data_loader()):
-            left_img, right_img, gt = data
+def test(model, data_loader, epoch, LOG):
 
-            output = model(left_img, right_img)
+    stages = 4
+    EPEs = [AverageMeter() for _ in range(stages)]
+    length_loader = len(data_loader)
+    model.eval()
+
+    for batch_id, data in enumerate(data_loader()):
+        left_img, right_img, gt = data
+
+        gt = gt.numpy()
+        mask = gt < args.maxdisp
+
+        with fluid.dygraph.no_grad():
+            outputs = model(left_img, right_img)
 
             for stage in range(stages):
-                error_3pixel_list[stage] += error_estimating(output[stage].numpy(), gt.numpy())
-                error_3pixel = sum(error_3pixel_list)
+                if len(gt[mask]) == 0:
+                    continue
+                output = paddle.squeeze(outputs[stage], 1).numpy()
+                output = output[:, 4:, :]
+                EPEs[stage].update(np.mean(np.abs(output[mask], gt[mask])))
 
-            info_str = ['Stage {} = {:.2f}'.format(x, float(error_3pixel_list[x] / (batch_id + 1))) for x in
-                        range(stages)]
-            info_str = '\t'.join(info_str)
+        info_str = '\t'.join(['Stage {} = {:.2f}({:.2f})'.format(x, EPEs[x].val, EPEs[x].avg) for x in range(stages)])
+        print('Test: [{}/{}] {}'.format(batch_id, length_loader, info_str))
 
-            print("Test: epoch {}, batch_id {} error 3pixel {}\t  {}".format(epoch,
-                                                                             batch_id,
-                                                                             round(error_3pixel / (batch_id + 1), 3),
-                                                                             info_str))
+    info_str = ', '.join(['Stage {}={:.2f}'.format(x, EPEs[x].avg) for x in range(stages)])
+    print('Average test EPE = ' + info_str)
 
-        if error_3pixel / (batch_id + 1) < error_3pixel_check:
-            error_3pixel_check = error_3pixel / (batch_id + 1)
-
-            fluid.save_dygraph(model.state_dict(), "results/"+args.model)
-            print("save model param success")
+    return EPEs[-1].avg
 
 
 def error_estimating(disp, ground_truth, maxdisp=192):

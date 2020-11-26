@@ -22,6 +22,7 @@ class Ownnet(nn.Layer):
         for i in range(3):
             net3d = post_3dconvs(self.layers_3d, self.channels_3d*self.growth_rate[i])
             self.volume_postprocess.append(net3d)
+
         self.volume_postprocess = nn.LayerList(self.volume_postprocess)
 
         self.refinement1_left = refinement1(in_channels=3, out_channels=32)
