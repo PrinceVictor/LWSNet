@@ -54,7 +54,6 @@ if __name__ == "__main__":
 
     output = model(left_image, right_image)
 
-
     for stage in range(stages):
         disp = (output[stage][0][0].numpy()).astype(np.uint8)
         # cv2.normalize(disp, disp, 0, 256, cv2.NORM_MINMAX)

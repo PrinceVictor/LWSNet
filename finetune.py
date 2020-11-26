@@ -1,5 +1,4 @@
 import paddle
-
 import paddle.nn.functional as F
 from paddle.io import DataLoader
 
@@ -33,14 +32,14 @@ parser.add_argument('--last_epoch', type=int, default=-1)
 parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=4)
 parser.add_argument('--gpu_id', type=int, default=0)
-parser.add_argument('--save_path', type=str, default="results/finetune/")
+parser.add_argument('--save_path', type=str, default="results/finetune")
 parser.add_argument('--model', type=str, default="checkpoint")
+parser.add_argument('--pretrained', type=str, default="results/pretrained")
 parser.add_argument('--resume', type=str, default="")
 parser.add_argument('--val_set', type=str, default='val_set.txt')
 args = parser.parse_args()
 
 def main():
-
 
     LOG = logger.setup_logger(__file__, "./log/")
     for key, value in sorted(vars(args).items()):
@@ -49,8 +48,7 @@ def main():
     LOG.info("finetune KITTI main()")
 
     gpu_id = args.gpu_id
-
-    place = paddle.set_device("gpu:"+str(gpu_id))
+    paddle.set_device("gpu:"+str(gpu_id))
 
     train_left_img, train_right_img, train_left_disp, \
     test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath, args.val_set)
@@ -78,24 +76,30 @@ def main():
     lr_scheduler = paddle.optimizer.lr.MultiStepDecay(learning_rate=args.lr, milestones=milestones, gamma=0.1)
     optimizer = paddle.optimizer.Adam(learning_rate=lr_scheduler, parameters=model.parameters())
 
-    if args.resume:
-        if len(glob.glob(args.resume+"*.pdparams")):
-            model_state = paddle.load(glob.glob(args.resume+"*.pdparams")[0])
+
+    if args.pretrained:
+        if len(glob.glob(args.pretrained + "/*.pdparams")):
+            model_state = paddle.load(glob.glob(args.pretrained + "/*.pdparams")[0])
+            model.set_state_dict(model_state)
+            LOG.info("load pretrained model state")
+
+    elif args.resume:
+        if len(glob.glob(args.resume+"/*.pdparams")):
+            model_state = paddle.load(glob.glob(args.resume+"/*.pdparams")[0])
             model.set_state_dict(model_state)
             LOG.info("load model state")
 
-        if len(glob.glob(args.resume+"*.pdopt")):
-            opt_state = paddle.load(glob.glob(args.resume+"*.pdopt")[0])
+        if len(glob.glob(args.resume+"/*.pdopt")):
+            opt_state = paddle.load(glob.glob(args.resume+"/*.pdopt")[0])
             optimizer.set_state_dict(opt_state)
             LOG.info("load optimizer state")
 
-        if len(glob.glob(args.resume+"*.params")):
-            param_state = paddle.load(glob.glob(args.resume+"*.params")[0])
+        if len(glob.glob(args.resume+"/*.params")):
+            param_state = paddle.load(glob.glob(args.resume+"/*.params")[0])
             last_epoch = param_state["epoch"] + 1
             last_lr = param_state["lr"]
             error_check = param_state["error"]
             LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}".format(last_epoch, last_lr, error_check))
-
 
         LOG.info("resume successfully")
 
@@ -105,7 +109,8 @@ def main():
     for epoch in range(last_epoch, args.epoch):
 
         train(model, train_loader, optimizer, lr_scheduler, epoch, LOG)
-        error = test(model, train_loader, epoch, LOG)
+
+        error = test(model, test_loader, epoch, LOG)
 
         if error < error_check:
             error_check = error
@@ -150,15 +155,15 @@ def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
         if batch_id % 5 == 0:
             info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
             info_str = '\t'.join(info_str)
-            info_str = 'Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
-                                                               info_str)
+            info_str = 'Train Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
+                                                                     info_str)
 
             LOG.info(info_str)
 
     lr_scheduler.step()
 
     info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
-    LOG.info('Average train loss = ' + info_str)
+    LOG.info('Average train loss: ' + info_str)
 
 def test(model, data_loader, epoch, LOG):
 
@@ -179,14 +184,13 @@ def test(model, data_loader, epoch, LOG):
                 output = paddle.squeeze(outputs[stage], 1)
                 D1s[stage].update(error_estimating(output.numpy(), gt.numpy()))
 
-        if batch_id % 5 == 0:
-            info_str = '\t'.join(
-                ['Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
 
+            info_str = '\t'.join(
+                ['Test Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
             LOG.info('[{}/{}] {}'.format(batch_id, length_loader, info_str))
 
     info_str = ', '.join(['Stage {}={:.4f}'.format(x, D1s[x].avg) for x in range(stages)])
-    LOG.info('Average test 3-Pixel Error = ' + info_str)
+    LOG.info('Average test 3-Pixel Error: ' + info_str)
 
     return D1s[-1].avg
 

@@ -3,11 +3,10 @@ import os
 import sys
 import time
 
-def setup_logger(name, save_path=None):
 
+def setup_logger(name, save_path=None):
     file_name = time.strftime('-%Y-%m-%d-%H-%M', time.localtime(time.time()))
     name = name.replace(".", "_")
-
     if os.path.dirname(name) == "":
         file_name = name + file_name + ".log"
     else:
@@ -18,7 +17,6 @@ def setup_logger(name, save_path=None):
         datefmt='%Y-%m-%d %H:%M:%S')
 
     logger = logging.getLogger(file_name)
-
     stream_handler = logging.StreamHandler(stream=sys.stderr)
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(log_formatter)
