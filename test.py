@@ -1,5 +1,5 @@
 import paddle
-from paddle.vision.transforms import Compose, Normalize, Transpose
+from paddle.vision.transforms import Compose, Normalize, ToTensor
 
 import os
 import argparse
@@ -79,7 +79,7 @@ def inference(model, left_imgs, right_ims):
     stages = 4
     model.eval()
 
-    transform = Compose([Transpose(),
+    transform = Compose([ToTensor(),
                          Normalize(mean=imagenet_stats["mean"],
                                    std=imagenet_stats["std"])])
 
@@ -89,7 +89,8 @@ def inference(model, left_imgs, right_ims):
 
         print(np.transpose(left_img, (2, 0, 1)))
 
-        left_img = paddle.to_tensor(transform(left_img)).unsqueeze(axis=0)
+        # left_img = paddle.to_tensor(transform(left_img)).unsqueeze(axis=0)
+        left_img = transform(left_img)
         right_img = paddle.to_tensor(transform(right_img)).unsqueeze(axis=0)
 
         print(left_img)

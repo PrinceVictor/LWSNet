@@ -31,7 +31,7 @@ parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help=
 parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=300)
 parser.add_argument('--last_epoch', type=int, default=-1)
-parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--save_path', type=str, default="results/finetune")
@@ -50,17 +50,17 @@ def main():
     LOG.info("finetune KITTI main()")
 
     gpu_id = args.gpu_id
-    paddle.set_device("gpu:"+str(gpu_id))
+    place = paddle.set_device("gpu:"+str(gpu_id))
 
     train_left_img, train_right_img, train_left_disp, \
     test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath, args.val_set)
 
     train_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True),
-        batch_size=args.train_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=False, num_workers=2)
+        batch_size=args.train_batch_size, places=place, shuffle=True, drop_last=False, num_workers=2)
     test_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(test_left_img, test_right_img, test_left_disp, training=False),
-        batch_size=args.test_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=False, drop_last=False, num_workers=2)
+        batch_size=args.test_batch_size, places=place, shuffle=False, drop_last=False, num_workers=2)
 
     train_batch_len, test_batch_len = len(train_loader), len(test_loader)
     LOG.info("train batch_len {} test batch_len {}".format(train_batch_len, test_batch_len))

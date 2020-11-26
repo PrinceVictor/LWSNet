@@ -1,6 +1,6 @@
 import paddle
 from paddle.io import Dataset
-from paddle.vision.transforms import Compose, Normalize, Transpose
+from paddle.vision.transforms import Compose, Normalize, Transpose, ToTensor
 import os
 from PIL import Image
 from . import readpfm as rp
@@ -39,9 +39,9 @@ class MyDataloader(Dataset):
         else:
             self.dploader = sceneflow_dispLoader
 
-        self.tramsform = Compose([Transpose(),
+        self.transform = Compose([Transpose(),
                                   Normalize(mean=imagenet_stats["mean"], std=imagenet_stats["std"])])
-
+        # self.transform = ToTensor()
 
     def __getitem__(self, index):
         left = self.left[index]
@@ -65,12 +65,12 @@ class MyDataloader(Dataset):
             x1 = random.randint(0, w - tw)
             y1 = random.randint(0, h - th)
 
-            left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
-            right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
+            left_img = np.array(left_img.crop((x1, y1, x1 + tw, y1 + th)), dtype=np.float32)/255
+            right_img = np.array(right_img.crop((x1, y1, x1 + tw, y1 + th)), dtype=np.float32)/255
             dataL = dataL[y1:y1 + th, x1:x1 + tw]
 
-            left_img = self.tramsform(left_img)
-            right_img = self.tramsform(right_img)
+            left_img = self.transform(left_img)
+            right_img = self.transform(right_img)
 
             return left_img, right_img, dataL
 
@@ -78,16 +78,16 @@ class MyDataloader(Dataset):
             w, h = left_img.size
 
             if self.kitti_set:
-                left_img = left_img.crop((w - 1232, h - 368, w, h))
-                right_img = right_img.crop((w - 1232, h - 368, w, h))
+                left_img = np.array(left_img.crop((w - 1232, h - 368, w, h)), dtype=np.float32)/255
+                right_img = np.array(right_img.crop((w - 1232, h - 368, w, h)), dtype=np.float32)/255
                 dataL = dataL[h - 368:h, w-1232:w]
             else:
-                left_img = left_img.crop((w - 960, h - 544, w, h))
-                right_img = right_img.crop((w - 960, h - 544, w, h))
+                left_img = np.array(left_img.crop((w - 960, h - 544, w, h)), dtype=np.float32)/255
+                right_img = np.array(right_img.crop((w - 960, h - 544, w, h)), dtype=np.float32)/255
                 # dataL = dataL[h - 544:h, w - 960:w]
 
-            left_img = self.tramsform(left_img)
-            right_img = self.tramsform(right_img)
+            left_img = self.transform(left_img)
+            right_img = self.transform(right_img)
 
             return left_img, right_img, dataL
 
