@@ -7,6 +7,7 @@ import glob
 import math
 import numpy as np
 import argparse
+import time
 
 import utils.logger as logger
 from utils.utils import AverageMeter as AverageMeter
@@ -19,6 +20,7 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
 # parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
+# parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
 parser.add_argument('--datapath', default='/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/training/', help='datapath')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
@@ -29,8 +31,8 @@ parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help=
 parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=300)
 parser.add_argument('--last_epoch', type=int, default=-1)
-parser.add_argument('--train_batch_size', type=int, default=4)
-parser.add_argument('--test_batch_size', type=int, default=4)
+parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--save_path', type=str, default="results/finetune")
 parser.add_argument('--model', type=str, default="checkpoint")
@@ -71,6 +73,7 @@ def main():
 
     last_epoch = 0
     error_check = math.inf
+    start_time = time.time()
 
     milestones = [200, 400]
     lr_scheduler = paddle.optimizer.lr.MultiStepDecay(learning_rate=args.lr, milestones=milestones, gamma=0.1)
@@ -99,7 +102,9 @@ def main():
             last_epoch = param_state["epoch"] + 1
             last_lr = param_state["lr"]
             error_check = param_state["error"]
-            LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}".format(last_epoch, last_lr, error_check))
+            start_time = start_time - param_state["time_cost"]
+            LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}\ttime_cost = {:.2f} Hours"
+                     .format(last_epoch, last_lr, error_check, param_state["time_cost"]/36000))
 
         LOG.info("resume successfully")
 
@@ -109,7 +114,6 @@ def main():
     for epoch in range(last_epoch, args.epoch):
 
         train(model, train_loader, optimizer, lr_scheduler, epoch, LOG)
-
         error = test(model, test_loader, epoch, LOG)
 
         if error < error_check:
@@ -119,9 +123,12 @@ def main():
             paddle.save(optimizer.state_dict(), save_filename + ".pdopt")
             paddle.save({"epoch": epoch,
                          "lr": optimizer.get_lr(),
-                         "error": error_check},
+                         "error": error_check,
+                         "time_cost": time.time()-start_time},
                         save_filename + ".params")
             LOG.info("save model param success")
+
+    LOG.info('full training time = {:.2f} Hours'.format((time.time() - start_time) / 3600))
 
 def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
 
@@ -155,7 +162,7 @@ def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
         if batch_id % 5 == 0:
             info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
             info_str = '\t'.join(info_str)
-            info_str = 'Train Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
+            info_str = 'Train Epoch {} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
                                                                      info_str)
 
             LOG.info(info_str)
@@ -186,8 +193,8 @@ def test(model, data_loader, epoch, LOG):
 
 
             info_str = '\t'.join(
-                ['Test Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
-            LOG.info('[{}/{}] {}'.format(batch_id, length_loader, info_str))
+                ['Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])
+            LOG.info('Test [{}/{}] {}'.format(batch_id, length_loader, info_str))
 
     info_str = ', '.join(['Stage {}={:.4f}'.format(x, D1s[x].avg) for x in range(stages)])
     LOG.info('Average test 3-Pixel Error: ' + info_str)

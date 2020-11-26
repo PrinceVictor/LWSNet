@@ -8,6 +8,7 @@ import numpy as np
 import os
 import glob
 import math
+import time
 
 from models.models import Ownnet
 from dataloader import sceneflow as sf
@@ -19,7 +20,8 @@ parser = argparse.ArgumentParser(description='pretrain Sceneflow main()')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/sceneflow/')
+# parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/sceneflow/')
+parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/sceneflow/')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
@@ -47,9 +49,7 @@ def main():
 
     stages = 4
     gpu_id = args.gpu_id
-
-    place = fluid.CUDAPlace(gpu_id)
-    fluid.enable_imperative(place)
+    paddle.set_device("gpu:"+str(gpu_id))
 
     train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = sf.dataloader(args.datapath)
 
@@ -71,25 +71,29 @@ def main():
 
     last_epoch = 0
     error_check = math.inf
+    start_time = time.time()
 
     optimizer = paddle.optimizer.Adam(learning_rate=args.lr, parameters=model.parameters())
 
     if args.resume:
-        if len(glob.glob(args.resume + "*.pdparams")):
-            model_state = paddle.load(glob.glob(args.resume + "*.pdparams")[0])
-            model.set_dict(model_state)
+        if len(glob.glob(args.resume + "/*.pdparams")):
+            model_state = paddle.load(glob.glob(args.resume + "/*.pdparams")[0])
+            model.set_state_dict(model_state)
             LOG.info("load model state")
 
-        if len(glob.glob(args.resume + "*.pdopt")):
-            opt_state = paddle.load(glob.glob(args.resume + "*.pdopt")[0])
-            optimizer.set_dict(opt_state)
+        if len(glob.glob(args.resume + "/*.pdopt")):
+            opt_state = paddle.load(glob.glob(args.resume + "/*.pdopt")[0])
+            optimizer.set_state_dict(opt_state)
             LOG.info("load optimizer state")
 
-        if len(glob.glob(args.resume + "*.params")):
-            param_state = paddle.load(glob.glob(args.resume + "*.params")[0])
+        if len(glob.glob(args.resume + "/*.params")):
+            param_state = paddle.load(glob.glob(args.resume + "/*.params")[0])
             last_epoch = param_state["epoch"] + 1
+            last_lr = param_state["lr"]
             error_check = param_state["error"]
-            LOG.info("load last epoch and error")
+            start_time = start_time - param_state["time_cost"]
+            LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}\ttime_cost = {:.2f} Hours"
+                     .format(last_epoch, last_lr, error_check, param_state["time_cost"] / 36000))
 
         LOG.info("resume successfully")
 
@@ -99,7 +103,6 @@ def main():
     for epoch in range(last_epoch, args.epoch):
 
         train(model, train_loader, optimizer, epoch, LOG)
-
         error = test(model, test_loader, epoch, LOG)
 
         if error < error_check:
@@ -107,8 +110,13 @@ def main():
 
             paddle.save(model.state_dict(), save_filename + ".pdparams")
             paddle.save(optimizer.state_dict(), save_filename + ".pdopt")
-            paddle.save({"epoch": epoch, "error": error_check}, save_filename + ".params")
+            paddle.save({"epoch": epoch,
+                         "error": error_check,
+                         "time_cost": time.time()-start_time},
+                        save_filename + ".params")
             LOG.info("save model param success")
+
+    LOG.info('full training time = {:.2f} Hours'.format((time.time() - start_time) / 3600))
 
 def train(model, data_loader, optimizer, epoch, LOG):
 
@@ -172,13 +180,14 @@ def test(model, data_loader, epoch, LOG):
                     continue
                 output = paddle.squeeze(outputs[stage], 1).numpy()
                 output = output[:, 4:, :]
-                EPEs[stage].update(np.mean(np.abs(output[mask], gt[mask])))
+                EPEs[stage].update(float(np.mean(np.abs(output[mask] - gt[mask]))))
 
-        info_str = '\t'.join(['Stage {} = {:.2f}({:.2f})'.format(x, EPEs[x].val, EPEs[x].avg) for x in range(stages)])
-        print('Test: [{}/{}] {}'.format(batch_id, length_loader, info_str))
+        if batch_id % 5 == 0:
+            info_str = '\t'.join(['Stage {} = {:.2f}({:.2f})'.format(x, EPEs[x].val, EPEs[x].avg) for x in range(stages)])
+            LOG.info('Test: [{}/{}] {}'.format(batch_id, length_loader, info_str))
 
     info_str = ', '.join(['Stage {}={:.2f}'.format(x, EPEs[x].avg) for x in range(stages)])
-    print('Average test EPE = ' + info_str)
+    LOG.info('Average test EPE = ' + info_str)
 
     return EPEs[-1].avg
 
