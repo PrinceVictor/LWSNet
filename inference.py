@@ -37,8 +37,8 @@ def main():
     place = paddle.set_device("gpu:" + str(gpu_id))
 
     if os.path.isdir(args.img_path):
-        left_imgs_path = glob.glob(args.img_path + "image_2/*.png")
-        right_imgs_path = glob.glob(args.img_path + "image_3/*.png")
+        left_imgs_path = sorted(glob.glob(args.img_path + "image_2/*.png"))
+        right_imgs_path = sorted(glob.glob(args.img_path + "image_3/*.png"))
     elif os.path.isfile(args.img_path):
         temp_path, img_name = args.img_path.split("/")[0:-2], args.img_path.split("/")[-1]
         temp_path = "/".join(temp_path)
@@ -77,6 +77,7 @@ def inference(model, left_imgs, right_ims, LOG):
                                    std=imagenet_stats["std"])])
 
     for index in range(len(left_imgs)):
+        # LOG.info("left = {}\tright = {}".format(left_imgs[index], right_ims[index]))
 
         left_img = cv2.imread(left_imgs[index], cv2.IMREAD_UNCHANGED)
         right_img = cv2.imread(right_ims[index], cv2.IMREAD_UNCHANGED)

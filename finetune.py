@@ -19,8 +19,8 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
-# parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
+# parser.add_argument('--datapath', default='/home/xjtu/NAS/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
+parser.add_argument('--datapath', default='/home/liupengchao/zhb/dataset/Kitti/data_scene_flow/training/', help='datapath')
 # parser.add_argument('--datapath', default='/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/training/', help='datapath')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
