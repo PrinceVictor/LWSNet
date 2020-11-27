@@ -80,7 +80,7 @@ def main():
     optimizer = paddle.optimizer.Adam(learning_rate=lr_scheduler, parameters=model.parameters())
 
 
-    if args.pretrained:
+    if args.pretrained and not args.resume:
         if len(glob.glob(args.pretrained + "/*.pdparams")):
             model_state = paddle.load(glob.glob(args.pretrained + "/*.pdparams")[0])
             model.set_state_dict(model_state)
@@ -162,9 +162,8 @@ def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
         if batch_id % 5 == 0:
             info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
             info_str = '\t'.join(info_str)
-            info_str = 'Train Epoch {} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
+            info_str = 'Train Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
                                                                      info_str)
-
             LOG.info(info_str)
 
     lr_scheduler.step()
@@ -190,7 +189,6 @@ def test(model, data_loader, epoch, LOG):
             for stage in range(stages):
                 output = paddle.squeeze(outputs[stage], 1)
                 D1s[stage].update(error_estimating(output.numpy(), gt.numpy()))
-
 
             info_str = '\t'.join(
                 ['Stage {} = {:.4f}({:.4f})'.format(x, D1s[x].val, D1s[x].avg) for x in range(stages)])

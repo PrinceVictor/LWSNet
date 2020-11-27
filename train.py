@@ -143,17 +143,17 @@ def train(model, data_loader, optimizer, epoch, LOG):
             stage_loss.append(loss)
             losses[index].update(float(loss.numpy()) / args.loss_weights[index])
 
-        sum_loss = fluid.layers.sum(stage_loss)
+        sum_loss = paddle.add_n(stage_loss)
         sum_loss.backward()
-        optimizer.minimize(sum_loss)
-        model.clear_gradients()
+        optimizer.step()
+        optimizer.clear_grad()
 
         if batch_id % 5 == 0:
             info_str = ['Stage {} = {:.2f}({:.2f})'.format(x, losses[x].val, losses[x].avg) for x in range(stages)]
             info_str = '\t'.join(info_str)
 
             LOG.info(
-                'Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
+                'Train Epoch{} [{}/{}]  lr:{:.5f}\t{}'.format(epoch, batch_id, length_loader, optimizer.get_lr(),
                                                         info_str))
 
     info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
