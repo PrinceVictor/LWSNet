@@ -16,12 +16,7 @@ import utils.logger as logger
 
 parser = argparse.ArgumentParser(description='Model Inference')
 parser.add_argument('--max_disparity', type=int, default=192)
-parser.add_argument('--left_img_path', type=str, default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_2")
-parser.add_argument('--right_img_path', type=str, default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_3")
-# parser.add_argument('--left_img_path', type=str,
-#                     default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_2/000004_10.png")
-# parser.add_argument('--right_img_path', type=str,
-#                     default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/image_3/000004_10.png")
+parser.add_argument('--img_path', type=str, default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/")
 parser.add_argument('--model', type=str, default="results/finetune/checkpoint.pdparams")
 parser.add_argument('--save_path', type=str, default="results/inference")
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
@@ -41,12 +36,14 @@ def main():
     gpu_id = args.gpu_id
     place = paddle.set_device("gpu:" + str(gpu_id))
 
-    if os.path.isdir(args.left_img_path):
-        left_imgs_path = glob.glob(args.left_img_path + "/*.png")
-        right_imgs_path = glob.glob(args.right_img_path + "/*.png")
-    else:
-        left_imgs_path = [args.left_img_path]
-        right_imgs_path = [args.right_img_path]
+    if os.path.isdir(args.img_path):
+        left_imgs_path = glob.glob(args.img_path + "image_2/*.png")
+        right_imgs_path = glob.glob(args.img_path + "image_3/*.png")
+    elif os.path.isfile(args.img_path):
+        temp_path, img_name = args.img_path.split("/")[0:-2], args.img_path.split("/")[-1]
+        temp_path = "/".join(temp_path)
+        left_imgs_path = [os.path.join(temp_path, "image_2/"+img_name)]
+        right_imgs_path = [os.path.join(temp_path, "image_3/"+img_name)]
     LOG.info("Load data path")
 
     model = Ownnet(args)
