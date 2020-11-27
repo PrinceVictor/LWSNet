@@ -111,6 +111,7 @@ def main():
             paddle.save(model.state_dict(), save_filename + ".pdparams")
             paddle.save(optimizer.state_dict(), save_filename + ".pdopt")
             paddle.save({"epoch": epoch,
+                         "lr": optimizer.get_lr(),
                          "error": error_check,
                          "time_cost": time.time()-start_time},
                         save_filename + ".params")
