@@ -109,7 +109,7 @@ def inference(model, left_imgs, right_ims, LOG):
             if args.vis:
                 concat_img = np.concatenate((left_img, color_disp), axis=0)
                 # cv2.imshow("left_img", left_img)
-                # cv2.imshow("raw_disp", raw_disp)
+                # cv2.imshow("raw_disp", outputs[stage])
                 # cv2.imshow("color_disp", color_disp)
                 cv2.imshow("concat_img", concat_img)
                 key = cv2.waitKey(0)
@@ -120,9 +120,6 @@ def inference(model, left_imgs, right_ims, LOG):
             save_img_path = os.path.join(args.save_path, img_name)
             cv2.imwrite(save_img_path, color_disp)
             LOG.info("{}\t\tSave img = {}".format(str, save_img_path))
-
-
-
 
 if __name__ == "__main__":
 

@@ -93,7 +93,7 @@ def main():
             error_check = param_state["error"]
             start_time = start_time - param_state["time_cost"]
             LOG.info("load last epoch = {}\tlr = {:.5f}\terror = {:.4f}\ttime_cost = {:.2f} Hours"
-                     .format(last_epoch, last_lr, error_check, param_state["time_cost"] / 36000))
+                     .format(last_epoch, last_lr, error_check, param_state["time_cost"] / 3600))
 
         LOG.info("resume successfully")
 
