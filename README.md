@@ -8,10 +8,23 @@ This repository is the code(PaddlePaddle version) of Our works **LW-SMNet** in C
 1. [Requirements](#Requirements)
 
 ### Requirements  
-- Python3 or Later
-- Anaconda or Miniconda
-- paddlepaddle-gpu 2.0rc
-- Ubuntu16.04 or Later
-- Nvidia-driver 440 or Later  
 
-Our Training and Evaluation environment includes Ubuntu20.04,  
+Our System version is Ubuntu20.04 with Graphics card Titan Xp.  
+
+#### Enviroment Dependencies:  
+- Anaconda or Miniconda
+- Python3 or Later
+- PaddlePaddle 2.0rc(GPU Version)
+- OpenCV 4.0 or Later 
+
+We provided [paddle_env.yml](paddle_env.yml) to install neccesarry dependencies directly throught conda.
+```
+conda env create -f paddle_env.yml
+```
+
+#### Dataset:
+- KITTI2015(Finetune)
+- Sceneflow(Pre-Train)
+
+
+Prepare 
