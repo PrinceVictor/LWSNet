@@ -16,7 +16,7 @@ import utils.logger as logger
 
 parser = argparse.ArgumentParser(description='Model Inference')
 parser.add_argument('--max_disparity', type=int, default=192)
-parser.add_argument('--img_path', type=str, default="/home/victor/DATA/kitti_dataset/scene_flow/data_scene_flow/testing/")
+parser.add_argument('--img_path', type=str, default="dataset/kitti2015/testing/")
 parser.add_argument('--model', type=str, default="results/finetune/checkpoint.pdparams")
 parser.add_argument('--save_path', type=str, default="results/inference")
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
