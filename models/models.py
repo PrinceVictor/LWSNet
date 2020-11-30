@@ -6,7 +6,7 @@ from models.submodules import feature_extraction, post_3dconvs, refinement1, ref
 
 class LWSNet(nn.Layer):
     def __init__(self, args):
-        super(Ownnet, self).__init__()
+        super(LWSNet, self).__init__()
 
         self.maxdisplist = args.maxdisplist
         self.layers_3d = args.layers_3d

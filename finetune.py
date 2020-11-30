@@ -29,7 +29,7 @@ parser.add_argument('--growth_rate', type=int, nargs='+', default=[4,1,1], help=
 parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
 parser.add_argument('--epoch', type=int, default=300)
 parser.add_argument('--last_epoch', type=int, default=-1)
-parser.add_argument('--train_batch_size', type=int, default=8)
+parser.add_argument('--train_batch_size', type=int, default=4)
 parser.add_argument('--test_batch_size', type=int, default=8)
 parser.add_argument('--gpu_id', type=int, default=0)
 parser.add_argument('--save_path', type=str, default="results/finetune")

@@ -11,7 +11,7 @@ import time
 import PIL.Image as Image
 
 from dataloader.dataloader import imagenet_stats
-from models.models import Ownnet
+from models.models import LWSNet
 import utils.logger as logger
 
 parser = argparse.ArgumentParser(description='Model Inference')
@@ -46,7 +46,7 @@ def main():
         right_imgs_path = [os.path.join(temp_path, "image_3/"+img_name)]
     LOG.info("Load data path")
 
-    model = Ownnet(args)
+    model = LWSNet(args)
     if not os.path.isfile(args.model):
         LOG.info("No model load")
         raise SystemExit
