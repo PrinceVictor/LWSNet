@@ -10,7 +10,7 @@ import glob
 import math
 import time
 
-from models.models import Ownnet
+from models.models import LWSNet
 from dataloader import sceneflow as sf
 from dataloader import dataloader
 import utils.logger as logger
@@ -40,6 +40,7 @@ args = parser.parse_args()
 
 def main():
 
+    # configuration logger
     LOG = logger.setup_logger(__file__, "./log/")
     for key, value in vars(args).items():
         LOG.info(str(key) + ': ' + str(value))
@@ -50,8 +51,10 @@ def main():
     gpu_id = args.gpu_id
     paddle.set_device("gpu:"+str(gpu_id))
 
+    # get train and test dataset path
     train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = sf.dataloader(args.datapath)
 
+    # train and test dataloader
     train_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True, kitti_set=False),
         batch_size=args.train_batch_size, places=paddle.CUDAPlace(gpu_id), shuffle=True, drop_last=False, num_workers=2)
@@ -66,12 +69,14 @@ def main():
         os.makedirs(args.save_path)
     save_filename = os.path.join(args.save_path, args.model)
 
-    model = Ownnet(args)
+    # load model
+    model = LWSNet(args)
 
     last_epoch = 0
     error_check = math.inf
     start_time = time.time()
 
+    # Setup optimizer
     optimizer = paddle.optimizer.Adam(learning_rate=args.lr, parameters=model.parameters())
 
     if args.resume:
@@ -118,6 +123,7 @@ def main():
 
     LOG.info('full training time = {:.2f} Hours'.format((time.time() - start_time) / 3600))
 
+# Train function
 def train(model, data_loader, optimizer, epoch, LOG):
 
     stages = 4
@@ -159,6 +165,7 @@ def train(model, data_loader, optimizer, epoch, LOG):
     info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
     LOG.info('Average train loss = ' + info_str)
 
+# Test function
 def test(model, data_loader, epoch, LOG):
 
     stages = 4

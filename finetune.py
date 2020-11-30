@@ -11,7 +11,7 @@ import time
 
 import utils.logger as logger
 from utils.utils import AverageMeter as AverageMeter
-from models.models import Ownnet
+from models.models import LWSNet
 from dataloader import kitti2015load as kitti
 from dataloader import dataloader
 
@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description='finetune KITTI')
 
 parser.add_argument('--maxdisp', type=int, default=192,
                     help='maxium disparity')
-parser.add_argument('--datapath', default='dataset/kitti2015/', help='datapath')
+parser.add_argument('--datapath', default='dataset/kitti2015/training/', help='datapath')
 parser.add_argument('--loss_weights', type=float, nargs='+', default=[0.25, 0.5, 1., 1.])
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
@@ -42,6 +42,7 @@ args = parser.parse_args()
 
 def main():
 
+    # configuration logger
     LOG = logger.setup_logger(__file__, "./log/")
     for key, value in sorted(vars(args).items()):
         LOG.info(str(key) + ': ' + str(value))
@@ -51,9 +52,11 @@ def main():
     gpu_id = args.gpu_id
     place = paddle.set_device("gpu:"+str(gpu_id))
 
+    # get train and test dataset path
     train_left_img, train_right_img, train_left_disp, \
     test_left_img, test_right_img, test_left_disp = kitti.dataloader(args.datapath, args.val_set)
 
+    # train and test dataloader
     train_loader = paddle.io.DataLoader(
         dataloader.MyDataloader(train_left_img, train_right_img, train_left_disp, training=True),
         batch_size=args.train_batch_size, places=place, shuffle=True, drop_last=False, num_workers=2)
@@ -68,16 +71,19 @@ def main():
         os.makedirs(args.save_path)
     save_filename = os.path.join(args.save_path, args.model)
 
-    model = Ownnet(args)
+    # load model
+    model = LWSNet(args)
 
     last_epoch = 0
     error_check = math.inf
     start_time = time.time()
 
+    # Setup optimizer and learn rate scheduler
     milestones = [200, 400]
     lr_scheduler = paddle.optimizer.lr.MultiStepDecay(learning_rate=args.lr, milestones=milestones, gamma=0.1)
     optimizer = paddle.optimizer.Adam(learning_rate=lr_scheduler, parameters=model.parameters())
 
+    # Load pretrained model or resume model from weight files
     if args.pretrained and not args.resume:
         if len(glob.glob(args.pretrained + "/*.pdparams")):
             model_state = paddle.load(glob.glob(args.pretrained + "/*.pdparams")[0])
@@ -132,6 +138,7 @@ def main():
 
     LOG.info('full training time = {:.2f} Hours'.format((time.time() - start_time) / 3600))
 
+# Train function
 def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
 
     stages = 4
@@ -173,6 +180,7 @@ def train(model, data_loader, optimizer, lr_scheduler, epoch, LOG):
     info_str = '\t'.join(['Stage {} = {:.2f}'.format(x, losses[x].avg) for x in range(stages)])
     LOG.info('Average train loss: ' + info_str)
 
+# Test function
 def test(model, data_loader, LOG):
 
     stages = 4

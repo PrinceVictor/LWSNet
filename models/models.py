@@ -4,7 +4,7 @@ import paddle.nn.functional as F
 
 from models.submodules import feature_extraction, post_3dconvs, refinement1, refinement2
 
-class Ownnet(nn.Layer):
+class LWSNet(nn.Layer):
     def __init__(self, args):
         super(Ownnet, self).__init__()
 

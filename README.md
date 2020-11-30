@@ -102,7 +102,7 @@ The results will be defaultly saved in directory `result/pretrained`.
 python finetune.py
 ```
 
-The default dataset path is `dataset/kitti2015/`, epoch is `300`, learn rate is `5e-4`
+The default dataset path is `dataset/kitti2015/training/`, epoch is `300`, learn rate is `5e-4`
 You can also specfic them by appending `--datapath`, `--epoch` and `--lr`.
 
 The results will be defaultly saved in directory `result/finetune`.
