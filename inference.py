@@ -17,6 +17,7 @@ import utils.logger as logger
 parser = argparse.ArgumentParser(description='Model Inference')
 parser.add_argument('--max_disparity', type=int, default=192)
 parser.add_argument('--img_path', type=str, default="dataset/kitti2015/testing/")
+parser.add_argument('--left_img', type=str, default="")
 parser.add_argument('--model', type=str, default="results/finetune/checkpoint.pdparams")
 parser.add_argument('--save_path', type=str, default="results/inference")
 parser.add_argument('--maxdisplist', type=int, nargs='+', default=[24, 5, 5])
@@ -36,16 +37,6 @@ def main():
     gpu_id = args.gpu_id
     place = paddle.set_device("gpu:" + str(gpu_id))
 
-    if os.path.isdir(args.img_path):
-        left_imgs_path = sorted(glob.glob(args.img_path + "image_2/*.png"))
-        right_imgs_path = sorted(glob.glob(args.img_path + "image_3/*.png"))
-    elif os.path.isfile(args.img_path):
-        temp_path, img_name = args.img_path.split("/")[0:-2], args.img_path.split("/")[-1]
-        temp_path = "/".join(temp_path)
-        left_imgs_path = [os.path.join(temp_path, "image_2/"+img_name)]
-        right_imgs_path = [os.path.join(temp_path, "image_3/"+img_name)]
-    LOG.info("Load data path")
-
     model = LWSNet(args)
     if not os.path.isfile(args.model):
         LOG.info("No model load")
@@ -56,10 +47,27 @@ def main():
 
     model.eval()
 
-    if os.path.exists(args.save_path):
-        shutil.rmtree(args.save_path)
-    os.makedirs(args.save_path)
-    LOG.info("Clear all files in the path: {}".format(args.save_path))
+    if not args.left_img:
+        if os.path.isdir(args.img_path):
+            left_imgs_path = sorted(glob.glob(args.img_path + "image_2/*.png"))
+            right_imgs_path = sorted(glob.glob(args.img_path + "image_3/*.png"))
+        elif os.path.isfile(args.img_path):
+            temp_path, img_name = args.img_path.split("/")[0:-2], args.img_path.split("/")[-1]
+            temp_path = "/".join(temp_path)
+            left_imgs_path = [os.path.join(temp_path, "image_2/"+img_name)]
+            right_imgs_path = [os.path.join(temp_path, "image_3/"+img_name)]
+        LOG.info("Load data path")
+
+        if os.path.exists(args.save_path):
+            shutil.rmtree(args.save_path)
+        os.makedirs(args.save_path)
+        LOG.info("Clear all files in the path: {}".format(args.save_path))
+
+    else :
+        temp_path = args.left_img.split("/")[0:-1]
+        temp_path = "/".join(temp_path)
+        left_imgs_path = [args.left_img]
+        right_imgs_path = [os.path.join(temp_path, "right_test.png")]
 
     LOG.info("Begin inference!")
 
@@ -99,12 +107,19 @@ def inference(model, left_imgs, right_ims, LOG):
             start_time = time.time()
             outputs = model(left_input, right_input)
             cost_time = time.time()-start_time
-            str = "Inference 4 stages cost = {:.3f} sec, FPS = {:.1f}".format(cost_time, 1/cost_time)
+
+            ss = "Inference 4 stages cost = {:.3f} sec, FPS = {:.1f}".format(cost_time, 1/cost_time)
 
             for stage in range(stages):
                 outputs[stage] = outputs[stage].squeeze(axis=[0, 1]).numpy().astype(np.uint8)
-
                 color_disp = cv2.applyColorMap(cv2.convertScaleAbs(outputs[stage], alpha=1, beta=0), cv2.COLORMAP_JET)
+
+                if args.left_img:
+                    temp_path = args.left_img.split("/")[0:-1]
+                    temp_path = "/".join(temp_path)
+                    save_img_path = os.path.join(temp_path, str(stage+1)+".png")
+                    cv2.imwrite(save_img_path, color_disp)
+                    LOG.info("{}\t\tSave img = {}".format(ss, save_img_path))
 
             if args.vis:
                 concat_img = np.concatenate((left_img, color_disp), axis=0)
@@ -116,10 +131,11 @@ def inference(model, left_imgs, right_ims, LOG):
                 if key == ord("q"):
                     break
 
-            img_name = left_imgs[index].split("/")[-1]
-            save_img_path = os.path.join(args.save_path, img_name)
-            cv2.imwrite(save_img_path, color_disp)
-            LOG.info("{}\t\tSave img = {}".format(str, save_img_path))
+            if not args.left_img:
+                img_name = left_imgs[index].split("/")[-1]
+                save_img_path = os.path.join(args.save_path, img_name)
+                cv2.imwrite(save_img_path, color_disp)
+                LOG.info("{}\t\tSave img = {}".format(ss, save_img_path))
 
 if __name__ == "__main__":
 
