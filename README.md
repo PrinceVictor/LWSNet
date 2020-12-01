@@ -116,6 +116,19 @@ The results(colored disparity images) will be defaultly saved in directory `resu
 
 **${train, finetune, inference}.py** also output the log file in directory `log`.
 
+##### We also provide one pair of stereo images under directory `reference/${left\right}_test.png` from KITTI2015 Dataset for testing conveniently.
+
+##### Our well-trained models are available now! You can download and use them to test directly!
+- [Our Finetuned Model](https://drive.google.com/drive/folders/1S90XaZ0GG_Go__7M95MpttlgdwHe4Nxu?usp=sharing)
+- [Our Pretrained Model](https://drive.google.com/drive/folders/1xc92Obm5PrFo0lBXzd9dWf3nLAkwelLS?usp=sharing)
+
+With above model files and test images, you can test by command:
+```
+python inference.py --left_img reference/left_test.png
+```
+The result are saved in `reference/${1,2,3,4}.png` corresponding to the inference result of stages
+
+
 ### 4. Results
 
 Our model pretrained 10 epoches on Sceneflow dataset and finetued 300 epochs on Kitti2015.  
