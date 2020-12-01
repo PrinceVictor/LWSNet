@@ -62,7 +62,7 @@ Or install manually
 #### Prepare the dataset:
 
 We provide the kitti2015 dataset(1.9GB) in our attachment.  
-But we do not provide the sceneflow dataset which is too large(almost 207GB).
+But we do not provide the sceneflow dataset because it is too large(almost 207GB).
 
 ```
 mkdir dataset
@@ -97,12 +97,12 @@ You can also specfic them by appending `--datapath`, `--epoch` and `--lr`.
 
 The results will be defaultly saved in directory `result/pretrained`.
 
-**Default finetune**(in our 1 Tintan Xp it would spend almost 2.8 hours with default parameters):
+**Default finetune**(in our one Tintan Xp it would spend almost 2.8 hours with default parameters):
 ```
 python finetune.py
 ```
 
-The default dataset path is `dataset/kitti2015/training/`, epoch is `300`, learn rate is `5e-4`
+The default dataset path is `dataset/kitti2015/training/`, epoch is `300`, learning rate is `5e-4`
 You can also specfic them by appending `--datapath`, `--epoch` and `--lr`.
 
 The results will be defaultly saved in directory `result/finetune`.
@@ -111,14 +111,14 @@ The results will be defaultly saved in directory `result/finetune`.
 python inference.py
 ```
 
-The default image path is `dataset/kitti2015/testing/`, You can also specfic them using `--img_path`.  
+The default image path is `dataset/kitti2015/testing/`, You can also specify them using `--img_path`.  
 The results(colored disparity images) will be defaultly saved in directory `result/inference`.
 
 **${train, finetune, inference}.py** also output the log file in directory `log`.
 
 ### 4. Results
 
-Our model pretrained 10 epoches on Sceneflow dataset and finetue 300 epochs on Kitti2015.  
+Our model pretrained 10 epoches on Sceneflow dataset and finetued 300 epochs on Kitti2015.  
 Finally get the **2.87%** 3-pixel error on Kitti2015 validation set.
 Our model can keep the speed 10FPS with all 4 stages during inference.
 
