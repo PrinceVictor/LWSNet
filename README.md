@@ -1,4 +1,4 @@
-# An End-To-End Light-Weighted Muilt-Stage Stereo Matching Network(飞浆/PaddlePaddle Version)  
+# An End-To-End Light-Weight Muilt-Stage Stereo Matching Network[飞浆/PaddlePaddle Version]
 
 This repository is the code(PaddlePaddle version) of Our works **LWSNet** in C4-AI Match for Team Stereo Free(双目纵横)
 
@@ -42,7 +42,7 @@ Our System version is Ubuntu20.04 with Graphics card **Titan Xp** during trainin
 - PaddlePaddle 2.0rc(GPU Version)
 - OpenCV 4.0 or Later 
 
-We provided [paddle_env.yml](paddle_env.yml) to install neccesarry dependencies directly throught conda.
+We provided [paddle_env.yml](paddle_env.yml) to install necesary dependencies directly throught conda.
 ```
 conda env create -f paddle_env.yml
 ```
